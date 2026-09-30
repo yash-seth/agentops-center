@@ -2,7 +2,7 @@ import pytest
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from aoc_runtime import faults, metrics
+from aoc_runtime import faults, metrics, resilience
 from aoc_runtime.config import get_settings
 from aoc_runtime.telemetry import init_telemetry, reset_telemetry_for_tests
 
@@ -31,5 +31,7 @@ def metric_reader():
 @pytest.fixture(autouse=True)
 def _no_faults():
     faults.clear_faults()
+    resilience.reset_breakers()
     yield
     faults.clear_faults()
+    resilience.reset_breakers()

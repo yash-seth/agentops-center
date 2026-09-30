@@ -64,7 +64,7 @@ def build() -> dict:
             target(f"histogram_quantile(0.95, sum by (le) (rate(aoc_run_duration_seconds_bucket{{{SEL}}}[$__rate_interval])))", "p95", "B"),
         ], unit="s"),
         panel(6, "Tool failure rate by tool", "timeseries", 12, 5, 12, 8, [target(
-            f'sum by (tool) (rate(aoc_tool_calls_total{{status="error",{SEL}}}[$__rate_interval])) '
+            f'sum by (tool) (rate(aoc_tool_calls_total{{status!="ok",{SEL}}}[$__rate_interval])) '
             f"/ sum by (tool) (rate(aoc_tool_calls_total{{{SEL}}}[$__rate_interval]))", "{{tool}}")],
             unit="percentunit"),
         panel(7, "Cost per run (avg / p95)", "timeseries", 0, 13, 12, 8, [

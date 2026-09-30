@@ -300,7 +300,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (tool) (rate(aoc_tool_calls_total{status=\"error\",agent=~\"$agent\",tenant=~\"$tenant\",env=~\"$env\"}[$__rate_interval])) / sum by (tool) (rate(aoc_tool_calls_total{agent=~\"$agent\",tenant=~\"$tenant\",env=~\"$env\"}[$__rate_interval]))",
+          "expr": "sum by (tool) (rate(aoc_tool_calls_total{status!=\"ok\",agent=~\"$agent\",tenant=~\"$tenant\",env=~\"$env\"}[$__rate_interval])) / sum by (tool) (rate(aoc_tool_calls_total{agent=~\"$agent\",tenant=~\"$tenant\",env=~\"$env\"}[$__rate_interval]))",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }

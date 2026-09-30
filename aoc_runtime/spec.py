@@ -8,6 +8,8 @@ class Limits(BaseModel):
     max_steps: int = 6
     cost_budget_usd: float = 0.05
     tool_timeout_s: float = 10
+    tool_retries: int = 2
+    retry_backoff_s: float = 0.2
 
 
 class AgentSpec(BaseModel):

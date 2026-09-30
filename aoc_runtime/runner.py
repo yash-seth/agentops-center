@@ -16,6 +16,7 @@ from .config import REPO_ROOT, get_settings
 from .cost import cost_usd
 from .graph_base import build_graph
 from .llm import get_llm, provider_of
+from .resilience import ResilienceConfig
 from .spec import AgentSpec, load_spec
 from .telemetry import RunContext, get_tracer, run_scope
 
@@ -134,6 +135,11 @@ def run_agent(
                     spec.system_prompt,
                     max_steps=spec.limits.max_steps,
                     cost_budget_usd=spec.limits.cost_budget_usd,
+                    resilience=ResilienceConfig(
+                        timeout_s=spec.limits.tool_timeout_s,
+                        max_retries=spec.limits.tool_retries,
+                        backoff_s=spec.limits.retry_backoff_s,
+                    ),
                 )
                 final = graph.invoke(
                     {"messages": [HumanMessage(question)], "loop_reason": None},

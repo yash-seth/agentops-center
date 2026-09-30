@@ -14,8 +14,8 @@ import time
 from dataclasses import dataclass
 
 
-class InjectedFault(RuntimeError):
-    """Raised by the fault layer so injected errors are distinguishable from real ones."""
+class InjectedFault(ConnectionError):
+    """Injected transient failure (a ConnectionError, so retries treat it like a real outage)."""
 
 
 @dataclass(frozen=True)

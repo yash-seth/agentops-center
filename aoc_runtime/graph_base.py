@@ -20,6 +20,13 @@ from . import faults, metrics
 from . import semconv as sc
 from .cost import cost_usd
 from .loop_guard import FALLBACK_ANSWER, LoopGuard
+from .resilience import (
+    CircuitOpenError,
+    ResilienceConfig,
+    breaker_for,
+    is_transient,
+    run_with_timeout,
+)
 from .telemetry import get_tracer
 
 
@@ -38,6 +45,52 @@ def _run_cost(messages: list) -> float:
     return total
 
 
+def _execute_tool(call: dict, tool: Any, cfg: ResilienceConfig) -> tuple[str, str, int, float]:
+    """Run one tool call with timeout, retries and circuit breaker.
+
+    Returns (text, status, attempts, total_ms).
+
+    status is ok | error | circuit_open. Every attempt gets its own span and metric sample.
+    """
+    name = call["name"]
+    breaker = breaker_for(name, cfg)
+    attempts = 0
+    started = time.perf_counter()
+    while True:
+        attempts += 1
+        result, status, retryable = "", "ok", False
+        with get_tracer().start_as_current_span(f"tool.{name}") as span:
+            span.set_attribute(sc.TOOL_NAME, name)
+            span.set_attribute("aoc.tool.attempt", attempts)
+            t0 = time.perf_counter()
+            try:
+                breaker.before_call()
+
+                def invoke() -> str:
+                    faults.apply_tool_faults(name)
+                    return tool.invoke(call["args"])
+
+                result = str(run_with_timeout(invoke, cfg.timeout_s))
+                breaker.record_success()
+            except CircuitOpenError as exc:
+                status, result = "circuit_open", f"tool error: {exc}"
+                span.set_attribute("aoc.tool.circuit", "open")
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+            except Exception as exc:  # noqa: BLE001 - tool failure is data, not a crash
+                breaker.record_failure()
+                status, result = "error", f"tool error: {exc}"
+                retryable = is_transient(exc)
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+            elapsed = time.perf_counter() - t0
+            span.set_attribute(sc.TOOL_STATUS, status)
+            span.set_attribute("aoc.tool.latency_ms", elapsed * 1000)
+        metrics.record_tool_call(name, status, elapsed)
+        if status == "ok" or not retryable or attempts > cfg.max_retries:
+            return result, status, attempts, (time.perf_counter() - started) * 1000
+        time.sleep(cfg.backoff_s * 2 ** (attempts - 1))
+
+
 def _flag_loop(reason: str) -> None:
     span = trace.get_current_span()
     span.set_attribute(sc.LOOP_DETECTED, True)
@@ -52,7 +105,9 @@ def build_graph(
     *,
     max_steps: int = 6,
     cost_budget_usd: float = 0.05,
+    resilience: ResilienceConfig | None = None,
 ):
+    resilience = resilience or ResilienceConfig()
     by_name = {t.name: t for t in tools}
     bound = llm.bind_tools(tools)
     guard = LoopGuard(max_steps=max_steps, cost_budget_usd=cost_budget_usd)
@@ -79,27 +134,19 @@ def build_graph(
                 _flag_loop(reason)
                 out.append(AIMessage(FALLBACK_ANSWER))
                 return {"messages": out, "loop_reason": reason}
-            with get_tracer().start_as_current_span(f"tool.{call['name']}") as span:
-                span.set_attribute(sc.TOOL_NAME, call["name"])
-                t0 = time.perf_counter()
-                status = "ok"
-                try:
-                    faults.apply_tool_faults(call["name"])
-                    result = by_name[call["name"]].invoke(call["args"])
-                except Exception as exc:  # noqa: BLE001 - tool failure is data, not a crash
-                    status, result = "error", f"tool error: {exc}"
-                    span.record_exception(exc)
-                    span.set_status(Status(StatusCode.ERROR, str(exc)))
-                elapsed = time.perf_counter() - t0
-                span.set_attribute(sc.TOOL_STATUS, status)
-                span.set_attribute("aoc.tool.latency_ms", elapsed * 1000)
-            metrics.record_tool_call(call["name"], status, elapsed)
+            result, status, attempts, total_ms = _execute_tool(
+                call, by_name[call["name"]], resilience
+            )
             out.append(
                 ToolMessage(
                     content=str(result),
                     tool_call_id=call["id"],
                     name=call["name"],
-                    additional_kwargs={"status": status, "latency_ms": elapsed * 1000},
+                    additional_kwargs={
+                        "status": status,
+                        "attempts": attempts,
+                        "latency_ms": total_ms,
+                    },
                 )
             )
         return {"messages": out}
