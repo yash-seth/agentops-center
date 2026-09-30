@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Strict environments: keep prompts/answers out of traces and the run store
     aoc_capture_content: bool = True
 
+    # Import the agents in the repo into the registry when the console API starts
+    aoc_auto_sync: bool = False
+
     # Console database (SQLite file by default; Postgres URL in compose/Kubernetes)
     aoc_db_url: str = ""
     # Where a run's trace can be opened. Verify the path against your Phoenix version.

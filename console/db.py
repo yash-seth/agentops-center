@@ -6,6 +6,7 @@ the compose/Kubernetes deployment. Tables are created with ``create_all`` for no
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from functools import lru_cache
 
@@ -142,7 +143,16 @@ def make_engine(url: str) -> Engine:
 def default_session_factory() -> sessionmaker[Session]:
     url = get_settings().aoc_db_url or f"sqlite:///{(DATA_DIR / 'console.db').as_posix()}"
     engine = make_engine(url)
-    Base.metadata.create_all(engine)
+    # Several processes (console API, gateway) may create the tables at the same moment on a fresh
+    # database, and the database may still be starting; retry instead of crashing.
+    for attempt in range(10):
+        try:
+            Base.metadata.create_all(engine)
+            break
+        except Exception:  # noqa: BLE001
+            if attempt == 9:
+                raise
+            time.sleep(2)
     return sessionmaker(engine, expire_on_commit=False)
 
 
