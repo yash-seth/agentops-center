@@ -1,100 +1,109 @@
 # AgentOps Center
 
-An operations console for production AI agents: a versioned agent registry, deployment history,
-run history with recorded steps, end-to-end OpenTelemetry tracing, Prometheus metrics with a
-Grafana dashboard and alert rules, loop detection, and fault injection for incident drills.
+An operations center for production AI agents. It answers the questions a team running agents in
+production has to answer: *what is live, is it healthy, what did it do, why did it fail, and can we
+reproduce it safely?*
 
-Two demo agents (LangGraph) serve a fictional snack company: a supply-chain assistant (RAG + SQL +
-ticket tools) and an HR policy bot (RAG). Everything runs on free tooling.
+- **Registry and governance:** immutable, versioned agent specs; promote and roll back through
+  staging and prod; deployment history; a hash-chained audit trail.
+- **Observability:** OpenTelemetry traces for prompts, tool calls and retrieval, a semantic-convention
+  standard, Prometheus metrics, a Grafana dashboard and alert rules (success rate, latency, tool
+  failure rate, cost per run, loops) defined as code.
+- **Incident response:** alerts open incidents with the affected runs attached; triage from a step
+  timeline; **deterministic replay** reproduces a failing run with no real model or tool calls;
+  **rerun** compares a run against another version.
+- **Reliability:** per-call timeouts, retries, circuit breakers, loop detection and fault injection.
+- **Responsible AI and FinOps:** PII redaction before anything is traced or stored, prompt-injection
+  screening, list-price cost showback by tenant, agent and model.
+- **Delivery:** evals as a regression gate in CI, an `aoc` CLI that scaffolds and validates new
+  agents, Docker, Helm, kind and GitHub Actions.
+
+Two demo agents built with LangGraph serve a fictional snack company: a supply-chain assistant (RAG,
+SQL, tickets) and an HR policy bot (RAG). Everything runs on free tooling.
+
+![A resolved incident with root cause, auto-attached runs and runbook link](docs/img/incident-resolved.jpg)
+
+![Deterministic replay reproducing a failing run, step by step](docs/img/replay-identical.jpg)
+
+## See it work in two minutes (no Docker, no API keys)
+```bash
+uv sync --python 3.12 --extra ui --extra pgvector
+export AOC_EMBEDDER=hash AOC_LLM_PROVIDERS=fake AOC_TELEMETRY_ENABLED=false
+export AOC_ENABLE_CHAOS_API=true AOC_AUTO_SYNC=true     # demo-only switches
+
+uv run --python 3.12 uvicorn console.api.main:app --port 8001 &
+uv run --python 3.12 uvicorn gateway.main:app --port 8000 &
+uv run --python 3.12 streamlit run console/ui/app.py &   # console UI on :8501
+
+uv run --python 3.12 python scripts/demo.py               # narrated incident lifecycle
+```
+The demo runs healthy traffic, breaks a dependency, shows retries and the circuit breaker containing
+it, opens an incident, replays the failing run, recovers, and resolves with a root cause. See
+[docs/DEMO.md](docs/DEMO.md) for the script and a recorded transcript. To use real models, set
+`GOOGLE_API_KEY` and/or `GROQ_API_KEY` (see `.env.example`).
+
+## Measured results
+Reproduce with `uv run python scripts/benchmark_resilience.py`; asserted by tests.
+
+| Mechanism | Result |
+|---|---|
+| Retries (2) at 50% injected tool failure | tool success 51.5% to 88.1% (theory 87.5%) |
+| Circuit breaker during a total outage (200 calls) | 600 calls to the failing dependency down to 5 (99.2% avoided) |
+| Loop guard, forced loops | stopped in 3 of 3 cases after 2 tool executions |
+| Deterministic replay | reproduces tool errors, breaker rejections and loop stops exactly |
+| Chunking (supply retrieval, hash embeddings) | heading/fixed MRR 0.938 vs paragraph 0.812 |
+
+The chunking numbers use a small judged set and an offline embedder; they show the method. Details in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+## Architecture
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams.
+
+```mermaid
+flowchart LR
+    client([Client]) --> gw[Gateway]
+    gw --> agent[LangGraph agent<br/>tools, RAG, guardrails]
+    gw -- spans --> otel[OTel Collector] --> phoenix[Phoenix]
+    gw -- metrics --> prom[Prometheus] --> graf[Grafana]
+    prom -- alerts --> am[Alertmanager] -- webhook --> api[Console API]
+    gw -- runs, audit --> db[(Postgres / SQLite)]
+    api --- db
+    ui[Console UI] --> api
+```
 
 ## Status
 | Area | State |
 |---|---|
-| Agents, RAG (local + pgvector), tracing, metrics, loop guard, chaos | done, unit tested |
-| Registry, promote/rollback, run history, console API, gateway, Streamlit UI | done, unit tested |
-| Grafana dashboard + alert rules (as code) | done, validated offline; not yet viewed live |
-| Traces in Phoenix, pgvector against Postgres | needs Docker (compose file ready) |
-| Tool timeouts, retries, circuit breaker | done, unit tested |
-| Incidents (alert webhook, exemplar runs, triage timeline), deterministic replay and cross-version rerun | done, unit tested and exercised against live servers |
-| FinOps showback, CSV export, model what-if | done, unit tested |
-| PII redaction (Presidio), prompt-injection screening, hash-chained audit log | done, unit tested; see docs/RESPONSIBLE_AI.md for limits |
-| Evals with a baseline regression gate; `aoc` CLI (scaffold, validate, eval, register, chaos, replay) | done, unit tested |
-| Dockerfile, compose stack, Helm chart, kind config, GitHub Actions (CI, evals, release) | written and statically checked; not yet run (needs Docker, kind, helm, GitHub) |
-| AKS deployment, demo video, final polish | planned |
+| Runtime, registry, console, gateway, incidents, replay, FinOps, guardrails, evals, CLI | built and unit tested; the core flows were also run against live local servers |
+| Dockerfile, compose, Helm chart, kind config, GitHub Actions, AKS scripts | written and statically checked; **not yet run** (needs Docker, kind, helm, GitHub, Azure) |
+| Traces in Phoenix, Grafana dashboard live, pgvector on Postgres | need the Docker stack; configuration is in place |
 
-## Quickstart (no Docker, no API keys)
+Known limits (details in the ADRs in `docs/adr/`): no schema migrations yet; PII detection is
+pattern-based and does not find person names; the deterministic eval baseline guards regressions but
+does not measure real answer quality; there is no authentication on the console or gateway; fault
+injection and circuit-breaker state are per process.
+
+## Quality gates
 ```bash
-uv sync --python 3.12 --extra ui --extra pgvector
-export AOC_EMBEDDER=hash AOC_LLM_PROVIDERS=fake AOC_TELEMETRY_ENABLED=false
-
-uv run --python 3.12 uvicorn console.api.main:app --port 8001 &
-uv run --python 3.12 uvicorn gateway.main:app --port 8000 &
-curl -X POST localhost:8001/registry/sync
-
-# take a version live: draft -> staging -> prod
-curl -X POST localhost:8001/agents/hr-policy-bot/versions/1.0.0/promote \
-  -H 'content-type: application/json' -d '{"environment":"staging","actor":"me"}'
-curl -X POST localhost:8001/agents/hr-policy-bot/versions/1.0.0/promote \
-  -H 'content-type: application/json' -d '{"environment":"prod","actor":"me"}'
-
-# call the agent; the gateway serves whichever version is live and records the run
-curl -X POST localhost:8000/v1/agents/hr-policy-bot/runs \
-  -H 'content-type: application/json' -d '{"question":"How many sick days do I get?"}'
-
-uv run --python 3.12 streamlit run console/ui/app.py   # console UI on :8501
+uv run --python 3.12 ruff check .      # lint
+uv run --python 3.12 aoc validate      # onboarding rules for every agent
+uv run --python 3.12 pytest            # unit, integration and static checks
+uv run --python 3.12 aoc eval --check  # eval regression gate
 ```
-Gateway metrics for Prometheus are at `localhost:8000/metrics`.
 
-To use real models set `GOOGLE_API_KEY` and/or `GROQ_API_KEY` (see `.env.example`); the runtime
-falls back down the provider list automatically.
+## More
+| | |
+|---|---|
+| `docs/ARCHITECTURE.md` | diagrams, components, what changes in production |
+| `docs/DEMO.md` | two-minute demo script and transcript |
+| `docs/DEPLOY.md` | docker compose, Kubernetes (kind), CI/CD |
+| `infra/aks/README.md` | optional Azure deployment, cost and teardown |
+| `docs/ONBOARDING.md` | add an agent with `aoc new-agent` |
+| `docs/SEMCONV.md` | trace and metric conventions |
+| `docs/RUNBOOK.md` | alert playbooks and the triage workflow |
+| `docs/RESPONSIBLE_AI.md` | guardrails, audit trail, and their limits |
+| `docs/BENCHMARKS.md` | reliability benchmarks |
+| `docs/adr/` | architecture decision records |
 
-## Full stack (needs Docker)
-```bash
-docker compose -f deploy/compose.yaml up   # Postgres+pgvector, Phoenix, OTel Collector, Prometheus, Grafana
-```
-Phoenix `:6006`, Grafana `:3000`, Prometheus `:9090`.
-
-## Chaos drills
-`scripts/generate_traffic.py --chaos tool-errors|latency|loop` generates traffic while injecting a
-fault, so the alerts and dashboard have something to show. See `docs/RUNBOOK.md`.
-
-## Incident drill (no Docker)
-```bash
-# gateway with an injected tool outage
-AOC_CHAOS='[{"tool":"rag_search","error_rate":1.0}]' uv run --python 3.12 uvicorn gateway.main:app --port 8000
-# send a few requests, then fire an Alertmanager-style webhook at the console
-curl -X POST localhost:8001/alerts -H 'content-type: application/json' -d '{"alerts":[{"status":"firing",
-  "labels":{"alertname":"ToolFailureRateHigh","agent":"hr-policy-bot","tool":"rag_search"},
-  "annotations":{"summary":"rag_search failing","runbook":"docs/RUNBOOK.md#tool-failures"}}]}'
-```
-Then open the Incidents page, inspect an exemplar run and replay it.
-
-## Evals
-`aoc eval --check` runs retrieval, trajectory and answer evals per agent and fails if a gated metric
-drops below `evals/baseline.fake.json` by more than 0.05. The deterministic mode (hash embeddings and
-a scripted model) runs in every PR; it guards against regressions rather than measuring absolute
-quality. Real-model evals run on demand or nightly (`.github/workflows/evals.yml`).
-
-Chunking strategies compared on the supply-chain retrieval set (8 judged queries, hash embeddings):
-
-| strategy | hit@1 | hit@3 | MRR |
-|---|---|---|---|
-| heading (default) | 0.875 | 1.000 | 0.938 |
-| fixed 400 chars | 0.875 | 1.000 | 0.938 |
-| paragraph | 0.625 | 1.000 | 0.812 |
-
-The set is small and the documents are tiny, so treat these as a demonstration of the method.
-
-## New agent in minutes
-`aoc new-agent claims-helper --template rag` scaffolds the agent, sample documents and an eval
-dataset, and validates them. See `docs/ONBOARDING.md`.
-
-## Docs
-`docs/SEMCONV.md` telemetry conventions, `docs/RUNBOOK.md` alert playbooks and triage workflow,
-`docs/RESPONSIBLE_AI.md` guardrails, audit trail and their limits, `docs/ONBOARDING.md` adding an agent,
-`docs/DEPLOY.md` compose, Kubernetes and CI/CD.
-
-## Tests
-```bash
-uv run --python 3.12 pytest && uv run --python 3.12 ruff check .
-```
+## License
+MIT, see [LICENSE](LICENSE).
