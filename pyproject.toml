@@ -23,6 +23,8 @@ dependencies = [
     "numpy>=1.26",
     "fastembed>=0.5",
     "typer>=0.15",
+    "opentelemetry-exporter-prometheus>=0.66b0",
+    "prometheus-client>=0.26.0",
 ]
 
 [project.optional-dependencies]

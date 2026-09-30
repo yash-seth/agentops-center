@@ -1,23 +1,7 @@
-import pytest
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from aoc_runtime import semconv as sc
-from aoc_runtime.config import get_settings
 from aoc_runtime.llm import FakeChatModel
 from aoc_runtime.runner import load_agent, run_agent
-from aoc_runtime.telemetry import init_telemetry, reset_telemetry_for_tests
-
-
-@pytest.fixture
-def exporter(monkeypatch):
-    monkeypatch.setenv("AOC_EMBEDDER", "hash")
-    get_settings.cache_clear()
-    reset_telemetry_for_tests()
-    exp = InMemorySpanExporter()
-    init_telemetry(exporter=exp, simple=True)
-    yield exp
-    reset_telemetry_for_tests()
-    get_settings.cache_clear()
 
 
 def test_hr_agent_answers_from_hr_docs_only(exporter):

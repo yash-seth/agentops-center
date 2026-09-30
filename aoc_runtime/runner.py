@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from langchain_core.messages import AIMessage, HumanMessage
 from opentelemetry.trace import Status, StatusCode
 
+from . import metrics
 from . import semconv as sc
 from .config import REPO_ROOT, get_settings
 from .cost import cost_usd
@@ -31,6 +32,7 @@ class RunResult:
     output_tokens: int
     cost_usd: float
     latency_s: float
+    loop_reason: str | None = None
 
 
 def load_agent(name: str) -> tuple[AgentSpec, list]:
@@ -60,15 +62,24 @@ def run_agent(name: str, question: str, *, llm=None, tenant: str | None = None) 
         )
         root.set_attributes(ctx.attributes())
         with run_scope(ctx):
-            status, answer, messages = "ok", "", []
+            status, answer, messages, loop_reason = "ok", "", [], None
             try:
-                graph = build_graph(llm, tools, spec.system_prompt)
+                graph = build_graph(
+                    llm,
+                    tools,
+                    spec.system_prompt,
+                    max_steps=spec.limits.max_steps,
+                    cost_budget_usd=spec.limits.cost_budget_usd,
+                )
                 final = graph.invoke(
-                    {"messages": [HumanMessage(question)]},
-                    {"recursion_limit": spec.limits.max_steps * 2 + 1},
+                    {"messages": [HumanMessage(question)], "loop_reason": None},
+                    {"recursion_limit": spec.limits.max_steps * 2 + 5},
                 )
                 messages = final["messages"]
                 answer = str(messages[-1].content)
+                loop_reason = final.get("loop_reason")
+                if loop_reason:
+                    status = "loop_stopped"
             except Exception as exc:  # noqa: BLE001
                 status, answer = "error", f"run failed: {exc}"
                 root.record_exception(exc)
@@ -94,10 +105,16 @@ def run_agent(name: str, question: str, *, llm=None, tenant: str | None = None) 
                     sc.GEN_AI_USAGE_INPUT_TOKENS: tin,
                     sc.GEN_AI_USAGE_OUTPUT_TOKENS: tout,
                     sc.COST_USD: cost,
+                    sc.LOOP_DETECTED: loop_reason is not None,
                 }
+            )
+            latency = time.perf_counter() - t0
+            metrics.record_run(
+                ctx, status=status, duration_s=latency, model=model,
+                input_tokens=tin, output_tokens=tout, cost_usd=cost,
             )
 
     return RunResult(
         run_id, spec.name, spec.version, status, answer, len(ai), tool_calls, tin, tout, cost,
-        time.perf_counter() - t0,
+        latency, loop_reason,
     )
