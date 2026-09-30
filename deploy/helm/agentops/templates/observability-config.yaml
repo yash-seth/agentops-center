@@ -1,0 +1,49 @@
+{{- if .Values.observability.enabled }}
+# Config files are copied from deploy/ by scripts/sync_helm_files.py (a test keeps them in sync),
+# so docker compose and Kubernetes run the same monitoring configuration.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  labels:
+    {{- include "agentops.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{ .Files.Get "files/otel-collector.yaml" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  labels:
+    {{- include "agentops.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+{{ .Files.Get "files/prometheus.yml" | indent 4 }}
+  alerts.yml: |
+{{ .Files.Get "files/alerts.yml" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  labels:
+    {{- include "agentops.labels" . | nindent 4 }}
+data:
+  alertmanager.yml: |
+{{ .Files.Get "files/alertmanager.yml" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  labels:
+    {{- include "agentops.labels" . | nindent 4 }}
+data:
+  datasource.yml: |
+{{ .Files.Get "files/datasource.yml" | indent 4 }}
+  dashboards.yml: |
+{{ .Files.Get "files/dashboards.yml" | indent 4 }}
+  agent-health.json: |
+{{ .Files.Get "files/agent-health.json" | indent 4 }}
+{{- end }}

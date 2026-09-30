@@ -1,0 +1,6 @@
+apiVersion: v2
+name: agentops
+description: AgentOps Center - operations console, gateway and observability stack for AI agents
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

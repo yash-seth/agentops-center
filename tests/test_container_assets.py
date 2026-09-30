@@ -75,8 +75,8 @@ def test_monitoring_config_targets_real_compose_services():
     hosts |= {t.split(":")[0] for a in prom["alerting"]["alertmanagers"]
               for cfg in a["static_configs"] for t in cfg["targets"]}
     assert {"gateway", "alertmanager"} <= hosts
-    for host in hosts - {"host.docker.internal"}:
-        assert host in COMPOSE["services"], host
+    for host in hosts:
+        assert host in COMPOSE["services"], host  # no dead host-only targets
 
     am = yaml.safe_load((REPO_ROOT / "deploy/alertmanager/alertmanager.yml").read_text())
     webhook = am["receivers"][0]["webhook_configs"][0]["url"]

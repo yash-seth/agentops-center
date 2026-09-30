@@ -1,0 +1,14 @@
+# kind create cluster --config deploy/kind/cluster.yaml
+# NodePorts are mapped to the host so the console, gateway and dashboards are reachable locally.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: agentops
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - {containerPort: 30080, hostPort: 8000}   # gateway
+      - {containerPort: 30081, hostPort: 8001}   # console API
+      - {containerPort: 30501, hostPort: 8501}   # console UI
+      - {containerPort: 30300, hostPort: 3000}   # Grafana
+      - {containerPort: 30606, hostPort: 6006}   # Phoenix
+      - {containerPort: 30090, hostPort: 9090}   # Prometheus

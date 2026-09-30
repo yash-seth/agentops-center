@@ -1,0 +1,89 @@
+# Default values target a local kind cluster: offline (fake model, hash embeddings), small
+# resource requests, NodePorts for host access. Override for real environments.
+
+image:
+  # Images are named <registry><prefix>-gateway|console-api|console-ui:<tag>
+  registry: ""            # e.g. ghcr.io/<owner>/
+  prefix: agentops
+  tag: dev
+  pullPolicy: IfNotPresent
+
+app:
+  env: dev
+  llmProviders: fake      # gemini,groq,fake for real models (set secrets.googleApiKey / groqApiKey)
+  embedder: hash          # fastembed for real embeddings (bake the model into the image)
+  vectorStore: pgvector
+  traceUrlTemplate: "http://localhost:6006/projects/UHJvamVjdDox/traces/{trace_id}"
+
+secrets:
+  existingSecret: ""      # name of a Secret with keys postgres-password, google-api-key, groq-api-key
+  postgresPassword: aoc   # local default only; use existingSecret anywhere shared
+  googleApiKey: ""
+  groqApiKey: ""
+
+gateway:
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 768Mi}
+
+consoleApi:
+  replicas: 1
+  autoSync: true          # import the agents baked into the image into the registry on start
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 768Mi}
+
+consoleUi:
+  replicas: 1
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 512Mi}
+
+postgres:
+  image: pgvector/pgvector:pg16
+  user: aoc
+  database: aoc
+  storage: 1Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+
+observability:
+  enabled: true           # Phoenix, OpenTelemetry Collector, Prometheus, Alertmanager, Grafana
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 768Mi}
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {memory: 256Mi}
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 384Mi}
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    resources:
+      requests: {cpu: 20m, memory: 32Mi}
+      limits: {memory: 128Mi}
+  grafana:
+    image: grafana/grafana:11.3.0
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 384Mi}
+
+service:
+  # NodePort exposes services on the kind node (see deploy/kind/cluster.yaml port mappings).
+  type: NodePort
+  nodePorts:
+    gateway: 30080
+    consoleApi: 30081
+    consoleUi: 30501
+    grafana: 30300
+    phoenix: 30606
+    prometheus: 30090

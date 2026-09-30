@@ -1,0 +1,60 @@
+{{- if .Values.observability.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: phoenix
+  labels:
+    app.kubernetes.io/name: phoenix
+    {{- include "agentops.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: phoenix
+  ports:
+    - name: http
+      port: 6006
+      targetPort: http
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePorts.phoenix }}
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phoenix
+  labels:
+    app.kubernetes.io/name: phoenix
+    {{- include "agentops.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phoenix
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phoenix
+        {{- include "agentops.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: phoenix
+          image: {{ .Values.observability.phoenix.image }}
+          ports:
+            - name: http
+              containerPort: 6006
+          env:
+            - name: PHOENIX_WORKING_DIR
+              value: /tmp/phoenix
+          readinessProbe:
+            tcpSocket: {port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.observability.phoenix.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /tmp/phoenix
+      volumes:
+        - name: data
+          emptyDir: {}
+{{- end }}

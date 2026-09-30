@@ -1,0 +1,25 @@
+AgentOps Center {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
+
+Wait for everything to be ready:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/console-api deploy/gateway deploy/console-ui
+
+{{- if eq .Values.service.type "NodePort" }}
+
+With the kind cluster from deploy/kind/cluster.yaml the services are on localhost:
+  gateway     http://localhost:8000
+  console API http://localhost:8001
+  console UI  http://localhost:8501
+{{- if .Values.observability.enabled }}
+  Grafana     http://localhost:3000
+  Phoenix     http://localhost:6006
+  Prometheus  http://localhost:9090
+{{- end }}
+{{- else }}
+
+Reach a service with port-forward, e.g.:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/gateway 8000:8000
+  kubectl -n {{ .Release.Namespace }} port-forward svc/console-api 8001:8001
+{{- end }}
+
+Smoke test:
+  python scripts/smoke_test.py --console http://localhost:8001 --gateway http://localhost:8000

@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-ui
+  labels:
+    app.kubernetes.io/name: console-ui
+    {{- include "agentops.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: console-ui
+  ports:
+    - name: http
+      port: 8501
+      targetPort: http
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePorts.consoleUi }}
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console-ui
+  labels:
+    app.kubernetes.io/name: console-ui
+    {{- include "agentops.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.consoleUi.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: console-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: console-ui
+        {{- include "agentops.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: console-ui
+          image: {{ include "agentops.image" (dict "root" . "name" "console-ui") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8501
+          env:
+            - name: AOC_CONSOLE_URL
+              value: "http://console-api:8001"
+          readinessProbe:
+            httpGet: {path: /_stcore/health, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /_stcore/health, port: http}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          securityContext:
+            {{- include "agentops.securityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.consoleUi.resources | nindent 12 }}
