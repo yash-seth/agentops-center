@@ -2,6 +2,11 @@ global:
   scrape_interval: 5s
   evaluation_interval: 5s
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 rule_files:
   - /etc/prometheus/alerts.yml
 
@@ -11,3 +16,8 @@ scrape_configs:
       # Agent processes expose /metrics on 9464 (scripts/generate_traffic.py, later the gateway).
       # host.docker.internal reaches the host from Docker Desktop.
       - targets: ["host.docker.internal:9464"]
+
+  - job_name: aoc-gateway
+    metrics_path: /metrics/
+    static_configs:
+      - targets: ["host.docker.internal:8000"]

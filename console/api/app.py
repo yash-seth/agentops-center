@@ -10,8 +10,59 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from aoc_runtime.config import get_settings
 
-from .. import registry, runs
-from ..db import AgentVersion, Deployment, Run, default_session_factory
+from .. import audit, incidents, registry, runs
+from ..db import AgentVersion, AuditEvent, Deployment, Incident, Run, default_session_factory
+
+
+class IncidentBody(BaseModel):
+    title: str
+    severity: str = "warning"
+    agent: str = ""
+    version: str = ""
+    tool: str = ""
+    actor: str = "unknown"
+    note: str = ""
+
+
+class ActorBody(BaseModel):
+    actor: str = "unknown"
+
+
+class ResolveBody(BaseModel):
+    actor: str = "unknown"
+    root_cause: str
+
+
+class NoteBody(BaseModel):
+    actor: str = "unknown"
+    message: str
+
+
+def incident_out(i: Incident, detail: bool = False) -> dict:
+    out = {
+        "id": i.id, "title": i.title, "severity": i.severity, "status": i.status,
+        "source": i.source, "alert_name": i.alert_name, "agent": i.agent, "version": i.version,
+        "tenant": i.tenant, "tool": i.tool, "runbook": i.runbook, "root_cause": i.root_cause,
+        "firings": i.firings, "created_at": i.created_at.isoformat(),
+        "resolved_at": i.resolved_at.isoformat() if i.resolved_at else None,
+        "run_count": len(i.runs),
+    }
+    if detail:
+        out["runs"] = [{"run_id": r.run_id, "reason": r.reason} for r in i.runs]
+        out["events"] = [
+            {"ts": e.ts.isoformat(), "kind": e.kind, "actor": e.actor, "message": e.message}
+            for e in i.events
+        ]
+    return out
+
+
+def audit_out(e: AuditEvent) -> dict:
+    return {
+        "id": e.id, "ts": e.ts.isoformat(), "action": e.action, "decision": e.decision,
+        "agent": e.agent, "version": e.version, "tenant": e.tenant, "run_id": e.run_id,
+        "input_hash": e.input_hash[:12], "output_hash": e.output_hash[:12], "detail": e.detail,
+        "hash": e.hash[:12],
+    }
 
 
 class PromoteBody(BaseModel):
@@ -163,5 +214,54 @@ def create_app(session_factory: sessionmaker[Session] | None = None) -> FastAPI:
     @app.get("/stats/versions")
     def stats(s: Session = db) -> list[dict]:
         return runs.summary_by_version(s)
+
+    def incident_call(fn, *args, **kwargs) -> dict:
+        try:
+            return incident_out(fn(*args, **kwargs), detail=True)
+        except incidents.IncidentError as exc:
+            code = 404 if "not found" in str(exc) else 409
+            raise HTTPException(code, str(exc)) from exc
+
+    @app.post("/alerts")
+    def alerts_webhook(payload: dict, s: Session = db) -> dict:
+        """Alertmanager webhook: firing alerts open (or update) incidents."""
+        touched = incidents.handle_alerts(s, payload)
+        return {"incidents": [i.id for i in touched]}
+
+    @app.get("/incidents")
+    def list_incidents(status: str | None = None, s: Session = db) -> list[dict]:
+        return [incident_out(i) for i in incidents.list_incidents(s, status)]
+
+    @app.post("/incidents")
+    def open_incident(body: IncidentBody, s: Session = db) -> dict:
+        return incident_call(
+            incidents.open_manual, s, title=body.title, severity=body.severity, agent=body.agent,
+            version=body.version, tool=body.tool, actor=body.actor, note=body.note,
+        )
+
+    @app.get("/incidents/{incident_id}")
+    def get_incident(incident_id: int, s: Session = db) -> dict:
+        return incident_call(incidents.get, s, incident_id)
+
+    @app.post("/incidents/{incident_id}/acknowledge")
+    def ack_incident(incident_id: int, body: ActorBody, s: Session = db) -> dict:
+        return incident_call(incidents.acknowledge, s, incident_id, body.actor)
+
+    @app.post("/incidents/{incident_id}/resolve")
+    def resolve_incident(incident_id: int, body: ResolveBody, s: Session = db) -> dict:
+        return incident_call(incidents.resolve, s, incident_id, body.actor, body.root_cause)
+
+    @app.post("/incidents/{incident_id}/notes")
+    def note_incident(incident_id: int, body: NoteBody, s: Session = db) -> dict:
+        return incident_call(incidents.add_note, s, incident_id, body.actor, body.message)
+
+    @app.get("/audit")
+    def audit_events(action: str | None = None, limit: int = 100, s: Session = db) -> list[dict]:
+        return [audit_out(e) for e in audit.list_events(s, limit, action)]
+
+    @app.get("/audit/verify")
+    def audit_verify(s: Session = db) -> dict:
+        ok, bad = audit.verify_chain(s)
+        return {"ok": ok, "first_bad_event": bad}
 
     return app

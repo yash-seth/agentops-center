@@ -59,6 +59,8 @@ def sha256(text: str) -> str:
 
 @lru_cache
 def _engines():
+    import logging
+
     import spacy
     from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, RecognizerRegistry
     from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngine
@@ -97,6 +99,8 @@ def _engines():
         def get_supported_languages(self) -> list[str]:
             return ["en"]
 
+    # Presidio warns about every non-English recognizer it skips; that is expected here.
+    logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
     nlp_engine = TokenizerOnlyEngine()
     nlp_engine.load()
     registry = RecognizerRegistry()

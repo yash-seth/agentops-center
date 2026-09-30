@@ -168,3 +168,57 @@ class AuditEvent(Base):
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
     prev_hash: Mapped[str] = mapped_column(String(64), default="")
     hash: Mapped[str] = mapped_column(String(64))
+
+
+class Incident(Base):
+    """Opened by an alert (or by hand); carries exemplar runs and a triage timeline."""
+
+    __tablename__ = "incidents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    severity: Mapped[str] = mapped_column(String(20), default="warning")  # critical|warning|info
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    source: Mapped[str] = mapped_column(String(20), default="alert")  # alert|manual
+    alert_name: Mapped[str] = mapped_column(String(100), default="")
+    fingerprint: Mapped[str] = mapped_column(String(64), default="", index=True)
+    agent: Mapped[str] = mapped_column(String(100), default="", index=True)
+    version: Mapped[str] = mapped_column(String(30), default="")
+    tenant: Mapped[str] = mapped_column(String(100), default="")
+    tool: Mapped[str] = mapped_column(String(100), default="")
+    labels: Mapped[dict] = mapped_column(JSON, default=dict)
+    runbook: Mapped[str] = mapped_column(String(300), default="")
+    root_cause: Mapped[str] = mapped_column(Text, default="")
+    firings: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    events: Mapped[list[IncidentEvent]] = relationship(
+        back_populates="incident", order_by="IncidentEvent.id", cascade="all, delete-orphan"
+    )
+    runs: Mapped[list[IncidentRun]] = relationship(
+        back_populates="incident", cascade="all, delete-orphan"
+    )
+
+
+class IncidentEvent(Base):
+    __tablename__ = "incident_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id"), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(30))
+    actor: Mapped[str] = mapped_column(String(100), default="system")
+    message: Mapped[str] = mapped_column(Text, default="")
+    incident: Mapped[Incident] = relationship(back_populates="events")
+
+
+class IncidentRun(Base):
+    """Exemplar run attached to an incident."""
+
+    __tablename__ = "incident_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id"), index=True)
+    run_id: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(String(100), default="")
+    incident: Mapped[Incident] = relationship(back_populates="runs")

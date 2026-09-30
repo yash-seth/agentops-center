@@ -1,0 +1,15 @@
+route:
+  receiver: console
+  group_by: [alertname, agent, agent_version, tool]
+  group_wait: 5s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: console
+    webhook_configs:
+      # The console API opens (or updates) an incident per alert fingerprint.
+      # host.docker.internal reaches the console API running on the host; in Kubernetes this
+      # becomes the console-api service URL.
+      - url: http://host.docker.internal:8001/alerts
+        send_resolved: true

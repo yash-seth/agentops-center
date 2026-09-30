@@ -62,9 +62,8 @@ def test_alert_rules_reference_known_metrics():
 
 def test_compose_is_valid_yaml_with_expected_services():
     compose = yaml.safe_load((DEPLOY / "compose.yaml").read_text())
-    assert {"postgres", "phoenix", "otel-collector", "prometheus", "grafana"} <= set(
-        compose["services"]
-    )
+    expected = {"postgres", "phoenix", "otel-collector", "prometheus", "alertmanager", "grafana"}
+    assert expected <= set(compose["services"])
 
 
 def test_promtool_free_syntax_check_of_scripts():
@@ -72,3 +71,13 @@ def test_promtool_free_syntax_check_of_scripts():
         subprocess.run(
             [sys.executable, "-m", "py_compile", str(REPO_ROOT / "scripts" / script)], check=True
         )
+
+
+def test_prometheus_routes_alerts_to_the_console_webhook():
+    prom = yaml.safe_load((DEPLOY / "prometheus/prometheus.yml").read_text())
+    assert prom["alerting"]["alertmanagers"][0]["static_configs"][0]["targets"] == [
+        "alertmanager:9093"
+    ]
+    am = yaml.safe_load((DEPLOY / "alertmanager/alertmanager.yml").read_text())
+    (hook,) = am["receivers"][0]["webhook_configs"]
+    assert hook["url"].endswith("/alerts") and hook["send_resolved"] is True
