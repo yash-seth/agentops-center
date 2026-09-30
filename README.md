@@ -18,7 +18,9 @@ ticket tools) and an HR policy bot (RAG). Everything runs on free tooling.
 | Incidents (alert webhook, exemplar runs, triage timeline), deterministic replay and cross-version rerun | done, unit tested and exercised against live servers |
 | FinOps showback, CSV export, model what-if | done, unit tested |
 | PII redaction (Presidio), prompt-injection screening, hash-chained audit log | done, unit tested; see docs/RESPONSIBLE_AI.md for limits |
-| Evals in CI, `aoc` CLI and scaffolder, Dockerfiles, Helm/kind, GitHub Actions | planned |
+| Evals with a baseline regression gate; `aoc` CLI (scaffold, validate, eval, register, chaos, replay) | done, unit tested |
+| Dockerfile, compose stack, Helm chart, kind config, GitHub Actions (CI, evals, release) | written and statically checked; not yet run (needs Docker, kind, helm, GitHub) |
+| AKS deployment, demo video, final polish | planned |
 
 ## Quickstart (no Docker, no API keys)
 ```bash
@@ -67,9 +69,30 @@ curl -X POST localhost:8001/alerts -H 'content-type: application/json' -d '{"ale
 ```
 Then open the Incidents page, inspect an exemplar run and replay it.
 
+## Evals
+`aoc eval --check` runs retrieval, trajectory and answer evals per agent and fails if a gated metric
+drops below `evals/baseline.fake.json` by more than 0.05. The deterministic mode (hash embeddings and
+a scripted model) runs in every PR; it guards against regressions rather than measuring absolute
+quality. Real-model evals run on demand or nightly (`.github/workflows/evals.yml`).
+
+Chunking strategies compared on the supply-chain retrieval set (8 judged queries, hash embeddings):
+
+| strategy | hit@1 | hit@3 | MRR |
+|---|---|---|---|
+| heading (default) | 0.875 | 1.000 | 0.938 |
+| fixed 400 chars | 0.875 | 1.000 | 0.938 |
+| paragraph | 0.625 | 1.000 | 0.812 |
+
+The set is small and the documents are tiny, so treat these as a demonstration of the method.
+
+## New agent in minutes
+`aoc new-agent claims-helper --template rag` scaffolds the agent, sample documents and an eval
+dataset, and validates them. See `docs/ONBOARDING.md`.
+
 ## Docs
 `docs/SEMCONV.md` telemetry conventions, `docs/RUNBOOK.md` alert playbooks and triage workflow,
-`docs/RESPONSIBLE_AI.md` guardrails, audit trail and their limits.
+`docs/RESPONSIBLE_AI.md` guardrails, audit trail and their limits, `docs/ONBOARDING.md` adding an agent,
+`docs/DEPLOY.md` compose, Kubernetes and CI/CD.
 
 ## Tests
 ```bash

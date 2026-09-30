@@ -1,0 +1,5 @@
+# Store text as LF so Makefiles, shell snippets and Helm files work on every platform.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
