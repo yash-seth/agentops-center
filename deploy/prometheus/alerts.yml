@@ -1,0 +1,46 @@
+groups:
+  - name: aoc-agent-health
+    rules:
+      - alert: AgentSuccessRateLow
+        expr: |
+          sum by (agent, agent_version) (rate(aoc_runs_total{status="ok"}[5m]))
+            / sum by (agent, agent_version) (rate(aoc_runs_total[5m])) < 0.90
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.agent }} {{ $labels.agent_version }} success rate below 90%"
+          runbook: "docs/RUNBOOK.md#low-success-rate"
+
+      - alert: ToolFailureRateHigh
+        expr: |
+          sum by (agent, tool) (rate(aoc_tool_calls_total{status="error"}[5m]))
+            / sum by (agent, tool) (rate(aoc_tool_calls_total[5m])) > 0.20
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "Tool {{ $labels.tool }} failing for {{ $labels.agent }} (>20%)"
+          runbook: "docs/RUNBOOK.md#tool-failures"
+
+      - alert: AgentLatencyP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, agent) (rate(aoc_run_duration_seconds_bucket[5m]))) > 20
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.agent }} p95 latency above 20s"
+          runbook: "docs/RUNBOOK.md#high-latency"
+
+      - alert: AgentLoopDetected
+        expr: sum by (agent, agent_version, reason) (increase(aoc_loops_detected_total[5m])) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.agent }} loop detected ({{ $labels.reason }})"
+          runbook: "docs/RUNBOOK.md#loops"
+
+      - alert: DailyCostOverBudget
+        expr: sum by (tenant) (increase(aoc_cost_usd_total[1d])) > 5
+        labels: {severity: warning}
+        annotations:
+          summary: "Tenant {{ $labels.tenant }} above the 5 USD daily budget"
+          runbook: "docs/RUNBOOK.md#cost-overrun"

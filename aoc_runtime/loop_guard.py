@@ -45,10 +45,10 @@ class LoopGuard:
         self.calls.append((tool, args_hash(args)))
         if self.calls.count(self.calls[-1]) >= self.max_repeats:
             return "repeat"
-        last4 = self.calls[-4:]
-        a, b, c, d = (last4 + [None] * 4)[:4] if len(last4) == 4 else (None,) * 4
-        if a is not None and a == c and b == d and a != b:
-            return "oscillation"
+        if len(self.calls) >= 4:
+            a, b, c, d = self.calls[-4:]
+            if a == c and b == d and a != b:
+                return "oscillation"
         return None
 
     def observe_cost(self, cost_usd: float) -> str | None:
