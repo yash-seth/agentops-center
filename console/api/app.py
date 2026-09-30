@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
 from aoc_runtime import guardrails
 from aoc_runtime.config import get_settings
 
-from .. import audit, incidents, registry, replay, runs
+from .. import audit, finops, incidents, registry, replay, runs
 from ..db import AgentVersion, AuditEvent, Deployment, Incident, Run, default_session_factory
 
 
@@ -283,6 +283,32 @@ def create_app(
     @app.post("/incidents/{incident_id}/notes")
     def note_incident(incident_id: int, body: NoteBody, s: Session = db) -> dict:
         return incident_call(incidents.add_note, s, incident_id, body.actor, body.message)
+
+    def finops_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except finops.FinOpsError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/finops/summary")
+    def finops_summary(group_by: str = "tenant", days: int = 30, s: Session = db) -> dict:
+        return finops_call(finops.summary, s, group_by, days)
+
+    @app.get("/finops/showback.csv")
+    def finops_showback(days: int = 30, s: Session = db) -> Response:
+        return Response(
+            finops.showback_csv(s, days),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="showback.csv"'},
+        )
+
+    @app.get("/finops/whatif")
+    def finops_whatif(model: str, days: int = 30, s: Session = db) -> dict:
+        return finops_call(finops.whatif, s, model, days)
+
+    @app.get("/finops/prices")
+    def finops_prices() -> list[dict]:
+        return finops.price_table()
 
     @app.get("/audit")
     def audit_events(action: str | None = None, limit: int = 100, s: Session = db) -> list[dict]:
