@@ -28,7 +28,7 @@ def test_transient_classification():
 
 
 def test_breaker_opens_after_threshold_then_half_opens():
-    b = CircuitBreaker(threshold=2, cooldown_s=0.05)
+    b = CircuitBreaker(threshold=2, cooldown_s=0.1)
     b.before_call()
     b.record_failure()
     b.before_call()
@@ -36,7 +36,7 @@ def test_breaker_opens_after_threshold_then_half_opens():
     assert b.is_open
     with pytest.raises(CircuitOpenError):
         b.before_call()
-    time.sleep(0.06)
+    time.sleep(0.3)  # generous: Windows timers can wake early
     b.before_call()  # half-open: one trial call allowed
     b.record_success()
     assert not b.is_open
