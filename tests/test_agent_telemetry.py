@@ -31,3 +31,17 @@ def test_tool_failure_is_recorded_not_raised(exporter, monkeypatch):
     assert res.status == "ok"
     tool_spans = [s for s in exporter.get_finished_spans() if s.name == "tool.rag_search"]
     assert tool_spans[0].attributes[sc.TOOL_STATUS] == "error"
+
+
+def test_run_ids_stay_unique_and_valid_when_tracing_is_not_configured(monkeypatch):
+    from opentelemetry import trace
+
+    from aoc_runtime import runner
+
+    monkeypatch.setattr(runner, "get_tracer", lambda: trace.NoOpTracer())
+    monkeypatch.setenv("AOC_EMBEDDER", "hash")
+    ids = {
+        run_agent("hr-policy-bot", "sick leave?", llm=FakeChatModel()).run_id for _ in range(3)
+    }
+    assert len(ids) == 3
+    assert all(len(i) == 32 and set(i) != {"0"} for i in ids)

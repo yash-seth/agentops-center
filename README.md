@@ -14,7 +14,11 @@ ticket tools) and an HR policy bot (RAG). Everything runs on free tooling.
 | Registry, promote/rollback, run history, console API, gateway, Streamlit UI | done, unit tested |
 | Grafana dashboard + alert rules (as code) | done, validated offline; not yet viewed live |
 | Traces in Phoenix, pgvector against Postgres | needs Docker (compose file ready) |
-| Incidents, replay, FinOps views, guardrails, evals CI, Helm/kind | planned |
+| Tool timeouts, retries, circuit breaker | done, unit tested |
+| Incidents (alert webhook, exemplar runs, triage timeline), deterministic replay and cross-version rerun | done, unit tested and exercised against live servers |
+| FinOps showback, CSV export, model what-if | done, unit tested |
+| PII redaction (Presidio), prompt-injection screening, hash-chained audit log | done, unit tested; see docs/RESPONSIBLE_AI.md for limits |
+| Evals in CI, `aoc` CLI and scaffolder, Dockerfiles, Helm/kind, GitHub Actions | planned |
 
 ## Quickstart (no Docker, no API keys)
 ```bash
@@ -52,8 +56,20 @@ Phoenix `:6006`, Grafana `:3000`, Prometheus `:9090`.
 `scripts/generate_traffic.py --chaos tool-errors|latency|loop` generates traffic while injecting a
 fault, so the alerts and dashboard have something to show. See `docs/RUNBOOK.md`.
 
+## Incident drill (no Docker)
+```bash
+# gateway with an injected tool outage
+AOC_CHAOS='[{"tool":"rag_search","error_rate":1.0}]' uv run --python 3.12 uvicorn gateway.main:app --port 8000
+# send a few requests, then fire an Alertmanager-style webhook at the console
+curl -X POST localhost:8001/alerts -H 'content-type: application/json' -d '{"alerts":[{"status":"firing",
+  "labels":{"alertname":"ToolFailureRateHigh","agent":"hr-policy-bot","tool":"rag_search"},
+  "annotations":{"summary":"rag_search failing","runbook":"docs/RUNBOOK.md#tool-failures"}}]}'
+```
+Then open the Incidents page, inspect an exemplar run and replay it.
+
 ## Docs
-`docs/SEMCONV.md` telemetry conventions, `docs/RUNBOOK.md` alert playbooks.
+`docs/SEMCONV.md` telemetry conventions, `docs/RUNBOOK.md` alert playbooks and triage workflow,
+`docs/RESPONSIBLE_AI.md` guardrails, audit trail and their limits.
 
 ## Tests
 ```bash

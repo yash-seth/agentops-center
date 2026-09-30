@@ -24,8 +24,11 @@ required attribute.
 | `gen_ai.usage.input_tokens` / `output_tokens` | `agent.run` | Token usage |
 | `aoc.cost.usd` | `agent.run` | List-price-equivalent cost of the run |
 | `aoc.loop.detected` | `agent.run` | True when the loop guard stopped the run |
-| `aoc.tool.name`, `aoc.tool.status` | `tool.*` | Tool name; ok or error |
-| `aoc.tool.latency_ms` | `tool.*` | Tool duration |
+| `aoc.tool.name`, `aoc.tool.status` | `tool.*` | Tool name; ok, error or circuit_open |
+| `aoc.tool.latency_ms` | `tool.*` | Duration of this attempt |
+| `aoc.tool.attempt` | `tool.*` | 1 for the first try, 2+ for retries; each attempt is its own span |
+| `aoc.tool.circuit` | `tool.*` | `open` when the circuit breaker refused the call |
+| `aoc.replay`, `aoc.replay.of`, `aoc.replay.mode` | every span of a replay | Marks replay traffic and links it to the original run |
 
 Span event `loop_detected` carries the `reason`: repeat, oscillation, step_budget, cost_budget.
 
@@ -51,3 +54,8 @@ only use these names; `tests/test_deploy_assets.py` enforces it.
 ## Cost
 Free-tier calls cost nothing in reality, but showback uses the price you would pay, so cost is
 always computed from the price table in `aoc_runtime/cost.py` (verify prices before quoting them).
+
+## Replays
+Replay runs are stored as runs of their own (new trace id) linked to the original, tagged with
+`aoc.replay=true` on every span, and excluded from production metrics so they never distort
+success rate, latency or cost. Deterministic replays use their own circuit-breaker namespace.

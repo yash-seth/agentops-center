@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -121,7 +122,10 @@ def run_agent(
     t0 = time.perf_counter()
 
     with tracer.start_as_current_span("agent.run") as root:
-        run_id = format(root.get_span_context().trace_id, "032x")
+        # Without a configured tracer the span context is invalid (trace id 0); fall back to a
+        # random id so runs are never conflated.
+        trace_id = root.get_span_context().trace_id
+        run_id = format(trace_id, "032x") if trace_id else uuid.uuid4().hex
         ctx = RunContext(
             agent_name=spec.name,
             agent_version=spec.version,

@@ -39,3 +39,20 @@ Alert: `DailyCostOverBudget`.
 1. Break down cost by tenant, agent and model (FinOps view).
 2. Look for loops or unusually long runs; check `aoc_run_cost_usd` p95.
 3. Consider routing simple questions to a cheaper model or lowering `limits.cost_budget_usd`.
+
+## Triage workflow in the console
+1. An alert reaches Alertmanager, which posts to the console `/alerts` webhook. An incident opens
+   with the runbook link and the recent affected runs attached (failed runs, loop stops, and runs
+   that survived only because the agent worked around a failing tool step).
+2. Open the incident, pick an exemplar run and read its step timeline: the first red step is
+   usually the cause.
+3. Use **Replay > deterministic** to reproduce the run from its recording without touching real
+   tools. An identical trajectory confirms the recording is faithful and lets you inspect it
+   safely.
+4. After shipping a fix as a new agent version, use **Replay > rerun** with that version to compare
+   trajectory, answer, cost and latency against the failing run.
+5. Acknowledge the incident, add notes, and resolve it with a root cause. The timeline keeps the
+   history. Alerts firing again attach to the same open incident instead of creating duplicates.
+
+A tool whose circuit breaker is open fails fast with status `circuit_open`; the breaker retries
+after its cooldown, so recovery is automatic once the dependency is healthy.
