@@ -3,13 +3,14 @@ from functools import lru_cache
 
 from langchain_core.tools import tool
 
+from aoc_runtime.config import DATA_DIR
 from data.seed_inventory import DB, seed
 from rag.indexer import build_store
 
 
 @lru_cache
 def _store():
-    return build_store()
+    return build_store(DATA_DIR / "docs" / "supply")
 
 
 @tool
