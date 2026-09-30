@@ -8,8 +8,7 @@ route:
 receivers:
   - name: console
     webhook_configs:
-      # The console API opens (or updates) an incident per alert fingerprint.
-      # host.docker.internal reaches the console API running on the host; in Kubernetes this
-      # becomes the console-api service URL.
-      - url: http://host.docker.internal:8001/alerts
+      # The console API opens (or updates) an incident per alert fingerprint. The hostname is
+      # the compose service name; the Helm chart uses the console-api Kubernetes service.
+      - url: http://console-api:8001/alerts
         send_resolved: true
