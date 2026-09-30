@@ -106,6 +106,8 @@ class Run(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     latency_s: Mapped[float] = mapped_column(Float, default=0.0)
+    replay_of: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    replay_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     step_records: Mapped[list[RunStep]] = relationship(
         back_populates="run", order_by="RunStep.idx", cascade="all, delete-orphan"

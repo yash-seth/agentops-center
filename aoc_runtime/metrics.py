@@ -19,6 +19,7 @@ from opentelemetry.metrics import Counter, Histogram
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import MetricReader
 
+from . import semconv as sc
 from .telemetry import RunContext, current_run
 
 DURATION_BUCKETS = [0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60]
@@ -94,6 +95,11 @@ def reset_metrics_for_tests() -> None:
     _inst = None
 
 
+def _is_replay(ctx: RunContext | None = None) -> bool:
+    ctx = ctx or current_run()
+    return ctx is not None and ctx.extra.get(sc.REPLAY) == "true"
+
+
 def _labels(ctx: RunContext | None = None) -> dict[str, str]:
     ctx = ctx or current_run()
     if ctx is None:
@@ -107,14 +113,14 @@ def _labels(ctx: RunContext | None = None) -> dict[str, str]:
 
 
 def record_tool_call(tool: str, status: str, duration_s: float) -> None:
-    if _inst is None:
+    if _inst is None or _is_replay():
         return
     _inst.tool_calls.add(1, {**_labels(), "tool": tool, "status": status})
     _inst.tool_duration.record(duration_s, {**_labels(), "tool": tool})
 
 
 def record_loop(reason: str) -> None:
-    if _inst is not None:
+    if _inst is not None and not _is_replay():
         _inst.loops.add(1, {**_labels(), "reason": reason})
 
 
@@ -138,7 +144,7 @@ def record_run(
     output_tokens: int,
     cost_usd: float,
 ) -> None:
-    if _inst is None:
+    if _inst is None or _is_replay(ctx):
         return
     lb = _labels(ctx)
     _inst.runs.add(1, {**lb, "status": status})

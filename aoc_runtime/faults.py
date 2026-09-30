@@ -7,10 +7,13 @@ inside the tool span.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import random
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 
@@ -47,7 +50,22 @@ def load_from_env() -> None:
         set_faults([Fault(**item) for item in json.loads(raw)])
 
 
+_suspended: contextvars.ContextVar[bool] = contextvars.ContextVar("aoc_faults_off", default=False)
+
+
+@contextmanager
+def suspended() -> Iterator[None]:
+    """Disable injected faults for the current context (used by deterministic replay)."""
+    token = _suspended.set(True)
+    try:
+        yield
+    finally:
+        _suspended.reset(token)
+
+
 def _matching(tool: str) -> list[Fault]:
+    if _suspended.get():
+        return []
     return [f for f in _faults if f.tool in (tool, "*")]
 
 
@@ -61,4 +79,6 @@ def apply_tool_faults(tool: str) -> None:
 
 
 def forced_loop_tool() -> str | None:
+    if _suspended.get():
+        return None
     return next((f.tool for f in _faults if f.force_loop), None)

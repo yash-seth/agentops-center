@@ -38,6 +38,8 @@ def record_run(s: Session, result: RunResult, redact: Redactor = _identity) -> R
         output_tokens=result.output_tokens,
         cost_usd=result.cost_usd,
         latency_s=result.latency_s,
+        replay_of=result.replay_of,
+        replay_mode=result.replay_mode,
         started_at=result.started_at,
         step_records=[
             RunStep(

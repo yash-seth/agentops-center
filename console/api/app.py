@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
+from aoc_runtime import guardrails
 from aoc_runtime.config import get_settings
 
-from .. import audit, incidents, registry, runs
+from .. import audit, incidents, registry, replay, runs
 from ..db import AgentVersion, AuditEvent, Deployment, Incident, Run, default_session_factory
 
 
@@ -22,6 +23,12 @@ class IncidentBody(BaseModel):
     tool: str = ""
     actor: str = "unknown"
     note: str = ""
+
+
+class ReplayBody(BaseModel):
+    mode: str = "deterministic"
+    version: str | None = None
+    actor: str = "unknown"
 
 
 class ActorBody(BaseModel):
@@ -108,6 +115,7 @@ def run_out(r: Run, detail: bool = False) -> dict:
         "loop_reason": r.loop_reason, "model": r.model, "steps": r.steps,
         "input_tokens": r.input_tokens, "output_tokens": r.output_tokens,
         "cost_usd": r.cost_usd, "latency_s": r.latency_s, "started_at": r.started_at.isoformat(),
+        "replay_of": r.replay_of, "replay_mode": r.replay_mode,
         "trace_url": get_settings().trace_url(r.run_id),
     }
     if detail:
@@ -126,7 +134,10 @@ def run_out(r: Run, detail: bool = False) -> dict:
     return out
 
 
-def create_app(session_factory: sessionmaker[Session] | None = None) -> FastAPI:
+def create_app(
+    session_factory: sessionmaker[Session] | None = None,
+    llm_factory: Callable[[], object] | None = None,
+) -> FastAPI:
     factory = session_factory or default_session_factory()
     app = FastAPI(title="AgentOps Console API")
 
@@ -210,6 +221,24 @@ def create_app(session_factory: sessionmaker[Session] | None = None) -> FastAPI:
         if run is None:
             raise HTTPException(404, "run not found")
         return run_out(run, detail=True)
+
+    @app.post("/runs/{run_id}/replay")
+    def replay_run(run_id: str, body: ReplayBody, s: Session = db) -> dict:
+        try:
+            new_run, diff = replay.replay_run(
+                s, run_id, mode=body.mode, actor=body.actor, version=body.version,
+                llm_factory=llm_factory, redact=guardrails.redact_text,
+            )
+        except replay.ReplayError as exc:
+            code = 404 if "not found" in str(exc) else 409
+            raise HTTPException(code, str(exc)) from exc
+        except registry.RegistryError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"run": run_out(new_run, detail=True), "diff": diff}
+
+    @app.get("/runs/{run_id}/replays")
+    def list_replays(run_id: str, s: Session = db) -> list[dict]:
+        return [run_out(r) for r in replay.replays_of(s, run_id)]
 
     @app.get("/stats/versions")
     def stats(s: Session = db) -> list[dict]:

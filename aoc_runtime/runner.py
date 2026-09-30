@@ -85,6 +85,8 @@ class RunResult:
     app_id: str = ""
     environment: str = ""
     model: str = ""
+    replay_of: str | None = None
+    replay_mode: str | None = None
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     step_records: list[StepRecord] = field(default_factory=list)
 
@@ -103,12 +105,16 @@ def run_agent(
     llm=None,
     tenant: str | None = None,
     spec: AgentSpec | None = None,
+    tools_override: list | None = None,
+    resilience: ResilienceConfig | None = None,
+    replay_of: str | None = None,
+    replay_mode: str | None = None,
 ) -> RunResult:
     """Run one invocation. Pass ``spec`` (e.g. a registry snapshot) to run a specific version."""
     settings = get_settings()
     disk_spec, all_tools = load_agent(name)
     spec = spec or disk_spec
-    tools = [t for t in all_tools if t.name in spec.tools]
+    tools = tools_override or [t for t in all_tools if t.name in spec.tools]
     started_at = datetime.now(UTC)
     llm = llm or get_llm()
     tracer = get_tracer()
@@ -124,6 +130,15 @@ def run_agent(
             app_id=spec.app_id,
             run_id=run_id,
             environment=settings.aoc_env,
+            extra=(
+                {
+                    sc.REPLAY: "true",
+                    sc.REPLAY_OF: replay_of,
+                    sc.REPLAY_MODE: replay_mode or "",
+                }
+                if replay_of
+                else {}
+            ),
         )
         root.set_attributes(ctx.attributes())
         with run_scope(ctx):
@@ -135,7 +150,8 @@ def run_agent(
                     spec.system_prompt,
                     max_steps=spec.limits.max_steps,
                     cost_budget_usd=spec.limits.cost_budget_usd,
-                    resilience=ResilienceConfig(
+                    resilience=resilience
+                    or ResilienceConfig(
                         timeout_s=spec.limits.tool_timeout_s,
                         max_retries=spec.limits.tool_retries,
                         backoff_s=spec.limits.retry_backoff_s,
@@ -189,4 +205,5 @@ def run_agent(
         latency, loop_reason,
         question=question, tenant=ctx.tenant_id, app_id=spec.app_id, environment=ctx.environment,
         model=model, started_at=started_at, step_records=extract_steps(messages, model),
+        replay_of=replay_of, replay_mode=replay_mode,
     )

@@ -23,6 +23,7 @@ class ResilienceConfig:
     backoff_s: float = 0.2
     breaker_threshold: int = 5  # consecutive failures before the breaker opens
     breaker_cooldown_s: float = 30.0
+    breaker_scope: str = ""  # replays use their own namespace
 
 
 class CircuitOpenError(RuntimeError):
@@ -74,10 +75,11 @@ _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="aoc-tool")
 
 
 def breaker_for(tool: str, cfg: ResilienceConfig) -> CircuitBreaker:
+    key = cfg.breaker_scope + tool
     with _registry_lock:
-        if tool not in _breakers:
-            _breakers[tool] = CircuitBreaker(cfg.breaker_threshold, cfg.breaker_cooldown_s)
-        return _breakers[tool]
+        if key not in _breakers:
+            _breakers[key] = CircuitBreaker(cfg.breaker_threshold, cfg.breaker_cooldown_s)
+        return _breakers[key]
 
 
 def reset_breakers() -> None:
