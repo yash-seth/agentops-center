@@ -1,0 +1,33 @@
+name: agentops
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aoc
+      POSTGRES_PASSWORD: aoc
+      POSTGRES_DB: aoc
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"   # UI + OTLP/HTTP
+      - "4317:4317"   # OTLP/gRPC
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes: [phoenixdata:/mnt/data]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4318:4318"   # OTLP/HTTP from agents
+    depends_on: [phoenix]
+
+volumes:
+  pgdata:
+  phoenixdata:

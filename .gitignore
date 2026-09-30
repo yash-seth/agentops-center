@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+data/*.db
+data/*.sqlite
+.fastembed_cache/
+*.egg-info/
+dist/
+
+# Local working files (not pushed)
+PLAN.md
+CLAUDE.md
+.claude/
