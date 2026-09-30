@@ -94,7 +94,14 @@ def build_graph(
                 span.set_attribute(sc.TOOL_STATUS, status)
                 span.set_attribute("aoc.tool.latency_ms", elapsed * 1000)
             metrics.record_tool_call(call["name"], status, elapsed)
-            out.append(ToolMessage(content=str(result), tool_call_id=call["id"], name=call["name"]))
+            out.append(
+                ToolMessage(
+                    content=str(result),
+                    tool_call_id=call["id"],
+                    name=call["name"],
+                    additional_kwargs={"status": status, "latency_ms": elapsed * 1000},
+                )
+            )
         return {"messages": out}
 
     def after_model(state: AgentState) -> str:

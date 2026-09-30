@@ -23,9 +23,12 @@ class AgentSpec(BaseModel):
     limits: Limits = Limits()
     redaction: dict[str, str] = {}
     root: Path = Path(".")
+    prompt_text: str | None = None  # set when loaded from a registry snapshot
 
     @property
     def system_prompt(self) -> str:
+        if self.prompt_text is not None:
+            return self.prompt_text
         return (self.root / self.prompt).read_text(encoding="utf-8")
 
 

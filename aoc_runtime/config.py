@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     aoc_embedder: str = "fastembed"
     aoc_pg_dsn: str = "postgresql://aoc:aoc@localhost:5432/aoc"
 
+    # Console database (SQLite file by default; Postgres URL in compose/Kubernetes)
+    aoc_db_url: str = ""
+    # Where a run's trace can be opened. Verify the path against your Phoenix version.
+    aoc_trace_url_template: str = "http://localhost:6006/projects/UHJvamVjdDox/traces/{trace_id}"
+
+    def trace_url(self, trace_id: str) -> str:
+        return self.aoc_trace_url_template.format(trace_id=trace_id)
+
     @property
     def providers(self) -> list[str]:
         return [p.strip() for p in self.aoc_llm_providers.split(",") if p.strip()]

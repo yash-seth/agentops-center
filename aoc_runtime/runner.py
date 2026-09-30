@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import importlib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from opentelemetry.trace import Status, StatusCode
 
 from . import metrics
@@ -17,6 +18,51 @@ from .graph_base import build_graph
 from .llm import get_llm, provider_of
 from .spec import AgentSpec, load_spec
 from .telemetry import RunContext, get_tracer, run_scope
+
+
+@dataclass
+class StepRecord:
+    """One recorded step: enough to replay the run deterministically without calling the LLM."""
+
+    idx: int
+    kind: str  # "llm" or "tool"
+    name: str  # model name or tool name
+    input: dict
+    output: str
+    status: str = "ok"
+    latency_ms: float | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+def extract_steps(messages: list, model: str) -> list[StepRecord]:
+    calls: dict[str, dict] = {}
+    steps: list[StepRecord] = []
+    for m in messages:
+        if isinstance(m, AIMessage):
+            for tc in m.tool_calls or []:
+                calls[tc["id"]] = tc["args"]
+            usage = m.usage_metadata or {}
+            steps.append(
+                StepRecord(
+                    idx=len(steps), kind="llm", name=model, input={},
+                    output=str(m.content),
+                    input_tokens=usage.get("input_tokens", 0),
+                    output_tokens=usage.get("output_tokens", 0),
+                    status="ok",
+                )
+            )
+            steps[-1].input = {"tool_calls": [dict(tc) for tc in (m.tool_calls or [])]}
+        elif isinstance(m, ToolMessage):
+            steps.append(
+                StepRecord(
+                    idx=len(steps), kind="tool", name=m.name or "tool",
+                    input=calls.get(m.tool_call_id, {}), output=str(m.content),
+                    status=m.additional_kwargs.get("status", "ok"),
+                    latency_ms=m.additional_kwargs.get("latency_ms"),
+                )
+            )
+    return steps
 
 
 @dataclass
@@ -33,6 +79,13 @@ class RunResult:
     cost_usd: float
     latency_s: float
     loop_reason: str | None = None
+    question: str = ""
+    tenant: str = ""
+    app_id: str = ""
+    environment: str = ""
+    model: str = ""
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    step_records: list[StepRecord] = field(default_factory=list)
 
 
 def load_agent(name: str) -> tuple[AgentSpec, list]:
@@ -42,9 +95,20 @@ def load_agent(name: str) -> tuple[AgentSpec, list]:
     return spec, module.TOOLS
 
 
-def run_agent(name: str, question: str, *, llm=None, tenant: str | None = None) -> RunResult:
+def run_agent(
+    name: str,
+    question: str,
+    *,
+    llm=None,
+    tenant: str | None = None,
+    spec: AgentSpec | None = None,
+) -> RunResult:
+    """Run one invocation. Pass ``spec`` (e.g. a registry snapshot) to run a specific version."""
     settings = get_settings()
-    spec, tools = load_agent(name)
+    disk_spec, all_tools = load_agent(name)
+    spec = spec or disk_spec
+    tools = [t for t in all_tools if t.name in spec.tools]
+    started_at = datetime.now(UTC)
     llm = llm or get_llm()
     tracer = get_tracer()
     t0 = time.perf_counter()
@@ -117,4 +181,6 @@ def run_agent(name: str, question: str, *, llm=None, tenant: str | None = None) 
     return RunResult(
         run_id, spec.name, spec.version, status, answer, len(ai), tool_calls, tin, tout, cost,
         latency, loop_reason,
+        question=question, tenant=ctx.tenant_id, app_id=spec.app_id, environment=ctx.environment,
+        model=model, started_at=started_at, step_records=extract_steps(messages, model),
     )
