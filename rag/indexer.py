@@ -7,6 +7,8 @@ from .chunking import STRATEGIES
 from .embeddings import Embedder, get_embedder
 from .store import Hit, LocalVectorStore
 
+DEFAULT_STRATEGY = "heading"
+
 
 class VectorStore(Protocol):
     name: str
@@ -17,7 +19,7 @@ class VectorStore(Protocol):
 
 def build_store(
     docs_dir: Path | None = None,
-    strategy: str = "heading",
+    strategy: str = DEFAULT_STRATEGY,
     embedder: Embedder | None = None,
     *,
     backend: str | None = None,

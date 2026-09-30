@@ -1,0 +1,42 @@
+agent: hr-policy-bot
+docs: hr  # folder under data/docs
+
+retrieval:
+  - query: How many days of annual leave do employees get?
+    relevant: leave_policy.md
+    must_contain: 24 days
+  - query: When is a medical certificate needed for sick leave?
+    relevant: leave_policy.md
+    must_contain: 3 consecutive days
+  - query: How many weeks of parental leave do primary caregivers get?
+    relevant: leave_policy.md
+    must_contain: 26 weeks
+  - query: How soon must expense claims be submitted?
+    relevant: conduct_and_expenses.md
+    must_contain: 30 days
+  - query: Which flight class is allowed for flights under 6 hours?
+    relevant: conduct_and_expenses.md
+    must_contain: Economy
+  - query: How many remote working days per week are allowed?
+    relevant: conduct_and_expenses.md
+    must_contain: 2 days per week
+  - query: Who must approve expense claims above 500 USD?
+    relevant: conduct_and_expenses.md
+    must_contain: director approval
+  - query: How quickly must a suspected data leak be reported?
+    relevant: conduct_and_expenses.md
+    must_contain: 24 hours
+
+trajectory:
+  - question: How many days of sick leave do employees get?
+    expect_tools: [rag_search]
+    max_steps: 4
+  - question: What is the expense claim deadline?
+    expect_tools: [rag_search]
+    max_steps: 4
+
+answers:
+  - question: How many days of annual leave do employees get?
+    must_contain: ["24 days"]
+  - question: How soon must expense claims be submitted?
+    must_contain: ["30 days"]

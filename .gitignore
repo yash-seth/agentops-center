@@ -15,3 +15,4 @@ dist/
 PLAN.md
 CLAUDE.md
 .claude/
+evals/out/

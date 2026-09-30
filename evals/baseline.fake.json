@@ -1,0 +1,36 @@
+{
+  "tolerance": 0.05,
+  "mode": "fake",
+  "agents": {
+    "hr-policy-bot": {
+      "retrieval.fixed.hit@1": 1.0,
+      "retrieval.fixed.hit@3": 1.0,
+      "retrieval.fixed.mrr": 1.0,
+      "retrieval.heading.hit@1": 1.0,
+      "retrieval.heading.hit@3": 1.0,
+      "retrieval.heading.mrr": 1.0,
+      "retrieval.paragraph.hit@1": 1.0,
+      "retrieval.paragraph.hit@3": 1.0,
+      "retrieval.paragraph.mrr": 1.0,
+      "trajectory.pass_rate": 1.0,
+      "trajectory.loop_rate": 0.0,
+      "trajectory.avg_steps": 2.0,
+      "answers.pass_rate": 1.0
+    },
+    "supply-chain-assistant": {
+      "retrieval.fixed.hit@1": 0.875,
+      "retrieval.fixed.hit@3": 1.0,
+      "retrieval.fixed.mrr": 0.9375,
+      "retrieval.heading.hit@1": 0.875,
+      "retrieval.heading.hit@3": 1.0,
+      "retrieval.heading.mrr": 0.9375,
+      "retrieval.paragraph.hit@1": 0.625,
+      "retrieval.paragraph.hit@3": 1.0,
+      "retrieval.paragraph.mrr": 0.8125,
+      "trajectory.pass_rate": 1.0,
+      "trajectory.loop_rate": 0.0,
+      "trajectory.avg_steps": 2.6667,
+      "answers.pass_rate": 0.6667
+    }
+  }
+}

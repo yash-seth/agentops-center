@@ -1,0 +1,52 @@
+agent: supply-chain-assistant
+docs: supply  # folder under data/docs
+
+# Retrieval judgements: the top-k passages must include one from `relevant` that contains
+# `must_contain`. Passage-level matching is what separates good chunking from bad.
+retrieval:
+  - query: When must a P1 ticket be opened for a stock-out?
+    relevant: replenishment_sop.md
+    must_contain: under 1 day
+  - query: What safety stock do fast-moving SKUs need?
+    relevant: replenishment_sop.md
+    must_contain: 20%
+  - query: Who approves expedited freight above 5,000 USD?
+    relevant: replenishment_sop.md
+    must_contain: regional supply manager
+  - query: How is the reorder point calculated?
+    relevant: replenishment_sop.md
+    must_contain: average daily demand
+  - query: What is the lead time for imported ingredients?
+    relevant: supplier_policy.md
+    must_contain: 21 days
+  - query: Can quality hold batches count as available inventory?
+    relevant: supplier_policy.md
+    must_contain: must not be counted
+  - query: How long can a cold chain temperature excursion last before quarantine?
+    relevant: supplier_policy.md
+    must_contain: 30 minutes
+  - query: What is the packaging supplier lead time for Hyderabad DC?
+    relevant: supplier_policy.md
+    must_contain: 5 day lead time
+
+# Trajectory expectations: which tools the agent must (and must not) use, and a step budget.
+trajectory:
+  - question: What is the stock and demand for SKU-1001?
+    expect_tools: [rag_search, inventory_sql]
+    max_steps: 6
+  - question: What is the standard lead time for imported ingredients?
+    expect_tools: [rag_search]
+    forbid_tools: [create_ticket]
+    max_steps: 6
+  - question: How many units of SKU-1002 are in inventory?
+    expect_tools: [inventory_sql]
+    max_steps: 6
+
+# Answer checks: substrings the final answer must (or must not) contain.
+answers:
+  - question: What is the standard lead time for imported ingredients?
+    must_contain: ["21 days"]
+  - question: When must a P1 ticket be opened for a stock-out?
+    must_contain: ["P1"]
+  - question: What temperature must chilled products be stored at?
+    must_contain: ["2 and 6"]
