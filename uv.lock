@@ -14,6 +14,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "fastembed" },
+    { name = "httpx" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
     { name = "langchain-groq" },
@@ -64,6 +65,7 @@ phoenix = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fastembed", specifier = ">=0.5" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'ui'", specifier = ">=0.28" },
     { name = "langchain-core", specifier = ">=0.3" },
     { name = "langchain-google-genai", specifier = ">=2.1" },

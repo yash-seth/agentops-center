@@ -1,0 +1,20 @@
+agent: {{name}}
+docs: {{module}}  # folder under data/docs
+
+# Replace these with real judgements from your domain experts before shipping.
+retrieval:
+  - query: How fast must urgent issues be escalated?
+    relevant: guide.md
+    must_contain: 2 hours
+  - query: Who owns a request and how long do they have to close it?
+    relevant: guide.md
+    must_contain: 5 working days
+
+trajectory:
+  - question: How fast must urgent issues be escalated?
+    expect_tools: [rag_search]
+    max_steps: 6
+
+answers:
+  - question: How fast must urgent issues be escalated?
+    must_contain: ["2 hours"]
