@@ -115,9 +115,14 @@ def init_telemetry(
     _provider = provider
 
     if instrument_langchain:
+        from openinference.instrumentation import TraceConfig
         from openinference.instrumentation.langchain import LangChainInstrumentor
 
-        LangChainInstrumentor().instrument(tracer_provider=provider)
+        capture = settings.aoc_capture_content
+        LangChainInstrumentor().instrument(
+            tracer_provider=provider,
+            config=TraceConfig(hide_inputs=not capture, hide_outputs=not capture),
+        )
     return provider
 
 

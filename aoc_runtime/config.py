@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     aoc_embedder: str = "fastembed"
     aoc_pg_dsn: str = "postgresql://aoc:aoc@localhost:5432/aoc"
 
+    # Strict environments: keep prompts/answers out of traces and the run store
+    aoc_capture_content: bool = True
+
     # Console database (SQLite file by default; Postgres URL in compose/Kubernetes)
     aoc_db_url: str = ""
     # Where a run's trace can be opened. Verify the path against your Phoenix version.

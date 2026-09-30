@@ -118,9 +118,14 @@ def record_loop(reason: str) -> None:
         _inst.loops.add(1, {**_labels(), "reason": reason})
 
 
-def record_guardrail_block(kind: str) -> None:
-    if _inst is not None:
-        _inst.guardrail_blocks.add(1, {**_labels(), "type": kind})
+def record_guardrail_block(kind: str, *, agent: str = "", tenant: str = "", env: str = "") -> None:
+    """Explicit labels are for blocks that happen before a run (and its context) exists."""
+    if _inst is None:
+        return
+    labels = _labels() or {
+        "agent": agent, "agent_version": "", "tenant": tenant, "env": env,
+    }
+    _inst.guardrail_blocks.add(1, {**labels, "type": kind})
 
 
 def record_run(

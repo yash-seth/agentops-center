@@ -148,3 +148,23 @@ def memory_session_factory() -> sessionmaker[Session]:
     engine = make_engine("sqlite://")
     Base.metadata.create_all(engine)
     return sessionmaker(engine, expire_on_commit=False)
+
+
+class AuditEvent(Base):
+    """Append-only, hash-chained audit trail. There is deliberately no update or delete API."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    action: Mapped[str] = mapped_column(String(30), index=True)  # input_check|redaction|run
+    decision: Mapped[str] = mapped_column(String(20))  # allow|block|redact
+    agent: Mapped[str] = mapped_column(String(100), default="")
+    version: Mapped[str] = mapped_column(String(30), default="")
+    tenant: Mapped[str] = mapped_column(String(100), default="")
+    run_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    input_hash: Mapped[str] = mapped_column(String(64), default="")
+    output_hash: Mapped[str] = mapped_column(String(64), default="")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    prev_hash: Mapped[str] = mapped_column(String(64), default="")
+    hash: Mapped[str] = mapped_column(String(64))

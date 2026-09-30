@@ -7,11 +7,12 @@ from collections.abc import Callable
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from aoc_runtime.guardrails import redact_obj
 from aoc_runtime.runner import RunResult
 
 from .db import Run, RunStep
 
-# Replaced by the Presidio-based redactor in week 4; stored text must never bypass this hook.
+# Everything persisted goes through this hook; the gateway passes the Presidio redactor.
 Redactor = Callable[[str], str]
 
 
@@ -40,7 +41,8 @@ def record_run(s: Session, result: RunResult, redact: Redactor = _identity) -> R
         started_at=result.started_at,
         step_records=[
             RunStep(
-                idx=st.idx, kind=st.kind, name=st.name, input=st.input, output=redact(st.output),
+                idx=st.idx, kind=st.kind, name=st.name,
+                input=redact_obj(st.input, redact), output=redact(st.output),
                 status=st.status, latency_ms=st.latency_ms, input_tokens=st.input_tokens,
                 output_tokens=st.output_tokens,
             )
