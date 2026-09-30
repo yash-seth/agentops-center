@@ -1,0 +1,40 @@
+# Overrides for a small AKS demo cluster (one Standard_B2s node, 2 vCPU / 4 GiB).
+# Used by infra/aks/deploy.sh:  helm upgrade --install ... --values values-aks.yaml
+
+image:
+  pullPolicy: Always      # tags come from the release workflow; always fetch the exact image
+
+service:
+  type: ClusterIP         # nothing is exposed publicly; use kubectl port-forward
+
+app:
+  env: staging            # not "prod": this is a demo cluster
+  enableChaosApi: false   # set true only if you want to run scripts/demo.py against the cluster
+
+# Keep the whole stack inside a single small node.
+gateway:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+
+consoleApi:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+
+postgres:
+  storage: 2Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+
+observability:
+  enabled: true
+  phoenix:
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 512Mi}
+  grafana:
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 256Mi}

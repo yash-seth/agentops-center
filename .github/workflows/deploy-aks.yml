@@ -1,0 +1,64 @@
+name: Deploy to AKS (manual)
+
+# Manual only. Deploys images published by release.yml to an existing AKS cluster using OIDC, so no
+# long-lived cloud credentials are stored. See infra/aks/README.md for setup and cost notes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy, e.g. 0.1.0"
+        required: true
+      resource_group:
+        description: "AKS resource group"
+        default: agentops-demo-rg
+      cluster:
+        description: "AKS cluster name"
+        default: agentops-demo
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-aks
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: aks   # add required reviewers on this environment in the repository settings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ github.event.inputs.resource_group }}
+          cluster-name: ${{ github.event.inputs.cluster }}
+      - uses: azure/setup-helm@v4
+      - name: Deploy the chart
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          helm upgrade --install agentops deploy/helm/agentops \
+            --namespace agentops --create-namespace \
+            --values deploy/helm/agentops/values-aks.yaml \
+            --set image.registry="ghcr.io/${owner}/" \
+            --set image.tag="${{ github.event.inputs.image_tag }}" \
+            --wait --timeout 10m
+      - uses: astral-sh/setup-uv@v5
+      - name: Smoke test through port-forward
+        run: |
+          kubectl -n agentops port-forward svc/gateway 8000:8000 &
+          kubectl -n agentops port-forward svc/console-api 8001:8001 &
+          sleep 5
+          uv sync --frozen --python 3.12
+          uv run python scripts/smoke_test.py --wait 120
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl -n agentops get pods -o wide
+          kubectl -n agentops describe pods | tail -n 120

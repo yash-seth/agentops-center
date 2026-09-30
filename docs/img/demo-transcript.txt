@@ -1,0 +1,45 @@
+
+[1] Registry: sync agents and put version 1.0.0 live
+    live versions: {'hr-policy-bot': '1.0.0', 'supply-chain-assistant': '1.0.0'}
+
+[2] Healthy traffic
+    baseline: 6 runs, 6 with every tool call ok, 0 hit tool failures
+
+[3] Incident: the retrieval dependency (rag_search) starts failing
+    during outage: 6 runs, 0 with every tool call ok, 6 hit tool failures
+    tool call outcomes: 1 error (with retries), 5 rejected by the circuit breaker
+    agents kept answering: 6/6 runs returned a response
+
+[4] Alerting opens an incident
+    (posting an Alertmanager-shaped webhook; the full stack sends this itself)
+    incident #1 [warning] Tool rag_search failing for hr-policy-bot (>20%)
+    3 exemplar runs attached automatically; runbook: docs/RUNBOOK.md#tool-failures
+
+[5] Triage: read the failing run's steps
+    0. llm  fake-llm    
+    1. tool rag_search     <-- error
+    2. llm  fake-llm    
+    root-cause clue: tool error: injected failure in tool 'rag_search'
+    trace: http://localhost:6006/projects/UHJvamVjdDox/traces/8b3a2cd26d684fe4c92654377d01f603
+
+[6] Replay the failing run deterministically (no real tool or model calls)
+    identical trajectory: True  (new run b4b013fb, excluded from production metrics)
+
+[7] Mitigate: the dependency recovers (fault cleared)
+    the circuit breaker stays open until its cooldown ends, then lets one call probe
+    ...waiting for the breaker to close
+    ...waiting for the breaker to close
+    ...waiting for the breaker to close
+    ...waiting for the breaker to close
+    recovered: tool calls are succeeding again
+
+[8] Rerun the same question live to confirm the recovery
+    original status ok -> rerun ok; first tool step now ok
+
+[9] Resolve the incident with a root cause
+    timeline: ['opened', 'runs_attached', 'acknowledged', 'resolved']
+
+[10] Audit trail
+    hash chain verified: True
+
+Demo complete.

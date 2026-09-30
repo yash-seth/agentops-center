@@ -108,8 +108,14 @@ def run_demo(
         f"runbook: {incident['runbook']}")
 
     step(5, "Triage: read the failing run's steps")
-    run_id = incident["runs"][0]["run_id"]
-    run = console.get(f"/runs/{run_id}").json()
+    # Prefer a run showing the original error over one the circuit breaker already rejected: the
+    # first failure is what points at the cause.
+    exemplars = [console.get(f"/runs/{r['run_id']}").json() for r in incident["runs"]]
+    run = next(
+        (x for x in exemplars if any(s["status"] == "error" for s in x["step_records"])),
+        exemplars[0],
+    )
+    run_id = run["run_id"]
     for s in run["step_records"]:
         flag = "" if s["status"] == "ok" else f"   <-- {s['status']}"
         out(f"    {s['idx']}. {s['kind']:4s} {s['name']:12s}{flag}")

@@ -35,7 +35,7 @@ def test_expected_workflows_exist():
     assert {"ci", "evals", "release"} <= set(WORKFLOWS)
 
 
-@pytest.mark.parametrize("name", ["ci", "evals", "release"])
+@pytest.mark.parametrize("name", ["ci", "evals", "release", "deploy-aks"])
 def test_workflows_are_least_privilege_and_pinned(name):
     wf = load(name)
     assert "permissions" in wf, "declare permissions explicitly instead of the broad default"
@@ -115,7 +115,12 @@ def test_release_publishes_every_target_and_attaches_the_registry_snapshot():
 def test_secrets_are_only_used_for_intended_purposes():
     for name, path in WORKFLOWS.items():
         for match in re.findall(r"secrets\.([A-Z_]+)", path.read_text()):
-            assert match in {"GITHUB_TOKEN", "GOOGLE_API_KEY"}, f"{name}: unexpected secret {match}"
+            allowed = {"GITHUB_TOKEN", "GOOGLE_API_KEY"} | (
+                {"AZURE_CLIENT_ID", "AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID"}
+                if name == "deploy-aks"
+                else set()
+            )
+            assert match in allowed, f"{name}: unexpected secret {match}"
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
