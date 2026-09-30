@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pgvector = ["psycopg[binary]>=3.2", "pgvector>=0.3"]
+ui = ["streamlit>=1.40", "httpx>=0.28", "pandas>=2.2"]
 
 [dependency-groups]
 dev = [
