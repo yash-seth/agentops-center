@@ -1,8 +1,8 @@
 """Fault injection ("chaos") so incidents can be produced on demand for demos and tests.
 
 Faults are process-global and can be set from code (``set_faults``), from the AOC_CHAOS env var
-(JSON), or later from a registry flag. Every injected fault is visible in traces because it runs
-inside the tool span.
+(JSON), or at runtime through the gateway admin API (when enabled). Every injected fault is
+visible in traces because it runs inside the tool span.
 """
 
 from __future__ import annotations
@@ -38,6 +38,10 @@ def set_faults(faults: list[Fault], seed: int | None = None) -> None:
     _faults = list(faults)
     if seed is not None:
         _rng.seed(seed)
+
+
+def get_faults() -> list[Fault]:
+    return list(_faults)
 
 
 def clear_faults() -> None:

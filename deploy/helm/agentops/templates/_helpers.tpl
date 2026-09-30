@@ -47,6 +47,8 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
   value: {{ .Values.app.embedder | quote }}
 - name: AOC_LLM_PROVIDERS
   value: {{ .Values.app.llmProviders | quote }}
+- name: AOC_ENABLE_CHAOS_API
+  value: {{ .Values.app.enableChaosApi | quote }}
 - name: AOC_TRACE_URL_TEMPLATE
   value: {{ .Values.app.traceUrlTemplate | quote }}
 {{- if .Values.observability.enabled }}

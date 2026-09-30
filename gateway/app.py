@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 
-from aoc_runtime import guardrails, metrics
+from aoc_runtime import faults, guardrails, metrics
 from aoc_runtime.config import get_settings
 from aoc_runtime.runner import run_agent
 from console import audit, registry, runs
@@ -16,6 +16,18 @@ from console.api.app import run_out
 from console.db import default_session_factory
 
 NOT_CAPTURED = "[content not captured]"
+
+
+class FaultBody(BaseModel):
+    tool: str = "*"
+    error_rate: float = Field(0.0, ge=0.0, le=1.0)
+    latency_s: float = Field(0.0, ge=0.0, le=30.0)
+    force_loop: bool = False
+
+
+class ChaosBody(BaseModel):
+    faults: list[FaultBody]
+    actor: str = "unknown"
 
 
 class RunRequest(BaseModel):
@@ -39,6 +51,35 @@ def create_gateway(
     @app.get("/healthz")
     def healthz() -> dict:
         return {"status": "ok"}
+
+    def require_chaos_api() -> None:
+        settings = get_settings()
+        if not settings.aoc_enable_chaos_api or settings.aoc_env == "prod":
+            raise HTTPException(404, "not found")  # invisible unless explicitly enabled
+
+    @app.get("/admin/chaos")
+    def get_chaos() -> dict:
+        require_chaos_api()
+        return {"faults": [vars(f) for f in faults.get_faults()]}
+
+    @app.put("/admin/chaos")
+    def set_chaos(body: ChaosBody) -> dict:
+        require_chaos_api()
+        faults.set_faults([faults.Fault(**f.model_dump()) for f in body.faults])
+        with factory() as s:
+            audit.log(
+                s, action="chaos", decision="allow",
+                detail={"faults": [f.model_dump() for f in body.faults], "actor": body.actor},
+            )
+        return {"faults": [vars(f) for f in faults.get_faults()]}
+
+    @app.delete("/admin/chaos")
+    def clear_chaos(actor: str = "unknown") -> dict:
+        require_chaos_api()
+        faults.clear_faults()
+        with factory() as s:
+            audit.log(s, action="chaos", decision="allow", detail={"faults": [], "actor": actor})
+        return {"faults": []}
 
     @app.post("/v1/agents/{name}/runs")
     def create_run(name: str, body: RunRequest) -> dict:

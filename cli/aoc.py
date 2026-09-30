@@ -143,11 +143,30 @@ def chaos(
     latency: Annotated[float, typer.Option(help="added seconds per call")] = 0.0,
     force_loop: bool = False,
     clear: bool = False,
+    gateway: Annotated[
+        str | None, typer.Option(help="apply to a running gateway (needs AOC_ENABLE_CHAOS_API)")
+    ] = None,
+    actor: str = "cli",
 ) -> None:
-    """Print an AOC_CHAOS setting; start the gateway with it to inject a fault."""
+    """Print an AOC_CHAOS setting, or apply/clear a fault on a running gateway with --gateway."""
     value = "" if clear else json.dumps(
         [{"tool": tool, "error_rate": error_rate, "latency_s": latency, "force_loop": force_loop}]
     )
+    if gateway:
+        import httpx
+
+        fault = {"tool": tool, "error_rate": error_rate, "latency_s": latency,
+                 "force_loop": force_loop}
+        if clear:
+            r = httpx.delete(f"{gateway}/admin/chaos", params={"actor": actor}, timeout=15)
+        else:
+            r = httpx.put(f"{gateway}/admin/chaos", json={"faults": [fault], "actor": actor},
+                          timeout=15)
+        if r.status_code >= 400:
+            typer.secho(f"{r.status_code}: {r.text}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+        typer.echo(f"gateway faults now: {r.json()['faults']}")
+        return
     typer.echo(f"bash:       export AOC_CHAOS='{value}'")
     typer.echo(f"powershell: $env:AOC_CHAOS = '{value}'")
 

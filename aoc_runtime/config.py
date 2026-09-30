@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Strict environments: keep prompts/answers out of traces and the run store
     aoc_capture_content: bool = True
 
+    # Expose /admin/chaos on the gateway so faults can be toggled without a restart. Never in prod.
+    aoc_enable_chaos_api: bool = False
+
     # Import the agents in the repo into the registry when the console API starts
     aoc_auto_sync: bool = False
 

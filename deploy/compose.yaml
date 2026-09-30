@@ -6,6 +6,7 @@ name: agentops
 
 x-app-env: &app-env
   AOC_ENV: dev
+  AOC_ENABLE_CHAOS_API: "true"   # demo stack only: lets `aoc chaos --gateway` toggle faults
   AOC_DB_URL: postgresql+psycopg://aoc:aoc@postgres:5432/aoc
   AOC_PG_DSN: postgresql://aoc:aoc@postgres:5432/aoc
   AOC_VECTOR_STORE: ${AOC_VECTOR_STORE:-pgvector}

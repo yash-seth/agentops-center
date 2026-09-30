@@ -13,6 +13,7 @@ app:
   llmProviders: fake      # gemini,groq,fake for real models (set secrets.googleApiKey / groqApiKey)
   embedder: hash          # fastembed for real embeddings (bake the model into the image)
   vectorStore: pgvector
+  enableChaosApi: false   # true only in demo clusters; the endpoint mutates runtime behaviour
   traceUrlTemplate: "http://localhost:6006/projects/UHJvamVjdDox/traces/{trace_id}"
 
 secrets:
