@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AOC_EMBEDDER: hash
+  AOC_LLM_PROVIDERS: fake
+  AOC_TELEMETRY_ENABLED: "false"
+
+jobs:
+  test:
+    name: Lint, tests, evals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --python 3.12 --extra pgvector --extra ui
+      - name: Lint
+        run: uv run ruff check .
+      - name: Onboarding validation
+        run: uv run aoc validate
+      - name: Unit tests
+        run: uv run pytest
+      - name: Eval regression gate (deterministic)
+        run: uv run aoc eval --check --out evals/out/scores.json --markdown evals/out/report.md
+      - name: Show eval report in the job summary
+        if: always()
+        run: cat evals/out/report.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Generated files are committed
+        run: |
+          uv run python scripts/build_dashboard.py
+          uv run python scripts/sync_helm_files.py
+          git diff --exit-code deploy/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: evals/out/
+          if-no-files-found: ignore
+
+  docker:
+    name: Build ${{ matrix.target }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [gateway, console-api, console-ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: ${{ matrix.target }}
+          push: false
+          tags: agentops-${{ matrix.target }}:ci
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,scope=${{ matrix.target }},mode=max
+
+  helm:
+    name: Helm lint and schema check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint (default and observability off)
+        run: |
+          helm lint deploy/helm/agentops
+          helm lint deploy/helm/agentops --set observability.enabled=false
+      - name: Validate rendered manifests against the Kubernetes schemas
+        run: |
+          helm template agentops deploy/helm/agentops > /tmp/rendered.yaml
+          docker run --rm -i ghcr.io/yannh/kubeconform:latest -strict -summary - < /tmp/rendered.yaml
+
+  kind-smoke:
+    name: Deploy to kind and smoke test
+    needs: [test, docker, helm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: agentops
+          config: deploy/kind/cluster.yaml
+      - name: Build images and load them into the cluster
+        run: |
+          for target in gateway console-api console-ui; do
+            docker build -f deploy/docker/Dockerfile --target "$target" -t "agentops-$target:ci" .
+            kind load docker-image "agentops-$target:ci" --name agentops
+          done
+      - name: Install the chart (observability off keeps the runner light)
+        run: |
+          helm install agentops deploy/helm/agentops \
+            --set image.tag=ci \
+            --set observability.enabled=false \
+            --wait --timeout 8m
+      - name: Smoke test through the NodePorts mapped by the kind config
+        run: |
+          uv sync --frozen --python 3.12
+          uv run python scripts/smoke_test.py --console http://localhost:8001 --gateway http://localhost:8000 --wait 120
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -o wide
+          kubectl describe pods | tail -n 120
+          for d in gateway console-api postgres; do
+            echo "=== $d ==="; kubectl logs "deploy/$d" --tail=80 || kubectl logs "statefulset/$d" --tail=80 || true
+          done
