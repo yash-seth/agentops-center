@@ -21,6 +21,20 @@ jobs:
   test:
     name: Lint, tests, evals
     runs-on: ubuntu-latest
+    services:
+      # A real Postgres with pgvector, so the vector-store test runs instead of being skipped.
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aoc
+          POSTGRES_PASSWORD: aoc
+          POSTGRES_DB: aoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aoc -d aoc"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -121,4 +135,41 @@ jobs:
           kubectl describe pods | tail -n 120
           for d in gateway console-api postgres; do
             echo "=== $d ==="; kubectl logs "deploy/$d" --tail=80 || kubectl logs "statefulset/$d" --tail=80 || true
+          done
+
+  kind-observability:
+    name: Observability end to end (kind)
+    needs: [test, docker, helm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: agentops
+          config: deploy/kind/cluster.yaml
+      - name: Build images and load them into the cluster
+        run: |
+          for target in gateway console-api console-ui; do
+            docker build -f deploy/docker/Dockerfile --target "$target" -t "agentops-$target:ci" .
+            kind load docker-image "agentops-$target:ci" --name agentops
+          done
+      - name: Install the full stack (Phoenix, collector, Prometheus, Alertmanager, Grafana)
+        run: |
+          helm install agentops deploy/helm/agentops \
+            --set image.tag=ci \
+            --set app.enableChaosApi=true \
+            --wait --timeout 15m
+      - name: Verify the pipeline end to end, including a real alert opening an incident
+        run: |
+          uv sync --frozen --python 3.12
+          uv run python scripts/e2e_observability.py
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -o wide
+          for d in gateway console-api prometheus alertmanager grafana phoenix otel-collector; do
+            echo "=== $d ==="; kubectl logs "deploy/$d" --tail=60 || true
           done

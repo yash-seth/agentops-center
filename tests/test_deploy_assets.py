@@ -67,7 +67,7 @@ def test_compose_is_valid_yaml_with_expected_services():
 
 
 def test_promtool_free_syntax_check_of_scripts():
-    for script in ("build_dashboard.py", "generate_traffic.py"):
+    for script in ("build_dashboard.py", "generate_traffic.py", "e2e_observability.py"):
         subprocess.run(
             [sys.executable, "-m", "py_compile", str(REPO_ROOT / "scripts" / script)], check=True
         )

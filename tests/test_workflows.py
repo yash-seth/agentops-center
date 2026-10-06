@@ -140,3 +140,22 @@ def test_no_ai_attribution_in_history_or_tracked_files():
             "tests/test_workflows.py"
         ):
             assert not pattern.search((REPO_ROOT / f).read_text(encoding="utf-8")), f
+
+
+def test_ci_runs_the_postgres_vector_test_against_a_real_database():
+    test_job = load("ci")["jobs"]["test"]
+    postgres = test_job["services"]["postgres"]
+    assert postgres["image"].startswith("pgvector/pgvector")
+    assert postgres["env"]["POSTGRES_DB"] == "aoc" and "5432:5432" in postgres["ports"]
+    assert "--health-cmd" in postgres["options"]  # tests must not start before it is ready
+
+
+def test_observability_e2e_job_deploys_the_full_stack_and_checks_the_alert_path():
+    job = load("ci")["jobs"]["kind-observability"]
+    assert job["needs"] == ["test", "docker", "helm"]
+    text = "\n".join(s.get("run", "") for s in job["steps"])
+    assert "app.enableChaosApi=true" in text  # needed to inject the fault
+    assert "observability.enabled=false" not in text  # this job exists to test the stack
+    assert "scripts/e2e_observability.py" in text
+    assert (REPO_ROOT / "scripts/e2e_observability.py").exists()
+    assert any("failure()" in str(s.get("if", "")) for s in job["steps"])
