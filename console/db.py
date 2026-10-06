@@ -20,6 +20,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    event,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import (
@@ -125,11 +126,28 @@ class RunStep(Base):
     name: Mapped[str] = mapped_column(String(100))
     input: Mapped[dict] = mapped_column(JSON, default=dict)
     output: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String(10), default="ok")
+    status: Mapped[str] = mapped_column(String(20), default="ok")
     latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     run: Mapped[Run] = relationship(back_populates="step_records")
+
+
+@event.listens_for(Base, "before_insert", propagate=True)
+@event.listens_for(Base, "before_update", propagate=True)
+def _enforce_string_lengths(mapper, connection, target) -> None:
+    """SQLite ignores VARCHAR(n) limits but Postgres rejects oversize values. Enforce them for
+    every backend so a too-long value fails in tests and development, not only on Postgres."""
+    for column in mapper.columns:
+        length = getattr(column.type, "length", None)
+        value = getattr(target, column.key, None)
+        if length and isinstance(column.type, String) and isinstance(value, str) and (
+            len(value) > length
+        ):
+            raise ValueError(
+                f"{mapper.class_.__name__}.{column.key} is {len(value)} characters but the "
+                f"column allows {length}; Postgres would reject this"
+            )
 
 
 def make_engine(url: str) -> Engine:
