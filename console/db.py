@@ -145,12 +145,12 @@ def default_session_factory() -> sessionmaker[Session]:
     engine = make_engine(url)
     # Several processes (console API, gateway) may create the tables at the same moment on a fresh
     # database, and the database may still be starting; retry instead of crashing.
-    for attempt in range(10):
+    for attempt in range(30):
         try:
             Base.metadata.create_all(engine)
             break
         except Exception:  # noqa: BLE001
-            if attempt == 9:
+            if attempt == 29:
                 raise
             time.sleep(2)
     return sessionmaker(engine, expire_on_commit=False)

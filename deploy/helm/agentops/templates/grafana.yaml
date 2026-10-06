@@ -38,6 +38,8 @@ spec:
       annotations:
         checksum/config: {{ printf "%s%s%s" (.Files.Get "files/datasource.yml") (.Files.Get "files/dashboards.yml") (.Files.Get "files/agent-health.json") | sha256sum }}
     spec:
+      # Do not inject <SERVICE>_PORT env vars (Phoenix crashes on PHOENIX_PORT=tcp://...).
+      enableServiceLinks: false
       containers:
         - name: grafana
           image: {{ .Values.observability.grafana.image }}

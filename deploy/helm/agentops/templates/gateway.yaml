@@ -39,6 +39,8 @@ spec:
         prometheus.io/path: /metrics/
         prometheus.io/port: "8000"
     spec:
+      # Do not inject <SERVICE>_PORT env vars (Phoenix crashes on PHOENIX_PORT=tcp://...).
+      enableServiceLinks: false
       containers:
         - name: gateway
           image: {{ include "agentops.image" (dict "root" . "name" "gateway") }}

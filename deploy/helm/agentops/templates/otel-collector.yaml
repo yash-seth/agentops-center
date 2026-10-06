@@ -34,6 +34,8 @@ spec:
       annotations:
         checksum/config: {{ .Files.Get "files/otel-collector.yaml" | sha256sum }}
     spec:
+      # Do not inject <SERVICE>_PORT env vars (Phoenix crashes on PHOENIX_PORT=tcp://...).
+      enableServiceLinks: false
       containers:
         - name: collector
           image: {{ .Values.observability.collector.image }}

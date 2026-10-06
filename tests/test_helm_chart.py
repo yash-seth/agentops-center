@@ -111,3 +111,14 @@ def test_smoke_test_and_notes_reference_existing_files():
     notes = (CHART / "templates/NOTES.txt").read_text()
     for path in re.findall(r"(scripts/\S+\.py)", notes):
         assert (REPO_ROOT / path).exists(), path
+
+
+def test_pods_do_not_get_service_env_vars_injected():
+    """A Service named "phoenix" makes Kubernetes inject PHOENIX_PORT=tcp://..., which crashes
+    Phoenix (found by the first real cluster run). Pods must opt out, and Phoenix sets its port."""
+    for template in TEMPLATES:
+        text = template.read_text()
+        if re.search(r"^kind: (Deployment|StatefulSet)$", text, re.M):
+            assert "enableServiceLinks: false" in text, template.name
+    phoenix = (CHART / "templates/phoenix.yaml").read_text()
+    assert re.search(r"name: PHOENIX_PORT\n\s+value: \"6006\"", phoenix)

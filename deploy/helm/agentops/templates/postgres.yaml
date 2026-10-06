@@ -32,6 +32,8 @@ spec:
         app.kubernetes.io/name: postgres
         {{- include "agentops.labels" . | nindent 8 }}
     spec:
+      # Do not inject <SERVICE>_PORT env vars (Phoenix crashes on PHOENIX_PORT=tcp://...).
+      enableServiceLinks: false
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}

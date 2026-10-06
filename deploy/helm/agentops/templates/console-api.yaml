@@ -35,6 +35,8 @@ spec:
         app.kubernetes.io/name: console-api
         {{- include "agentops.labels" . | nindent 8 }}
     spec:
+      # Do not inject <SERVICE>_PORT env vars (Phoenix crashes on PHOENIX_PORT=tcp://...).
+      enableServiceLinks: false
       containers:
         - name: console-api
           image: {{ include "agentops.image" (dict "root" . "name" "console-api") }}

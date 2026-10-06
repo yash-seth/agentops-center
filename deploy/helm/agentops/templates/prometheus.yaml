@@ -38,6 +38,8 @@ spec:
       annotations:
         checksum/config: {{ printf "%s%s" (.Files.Get "files/prometheus.yml") (.Files.Get "files/alerts.yml") | sha256sum }}
     spec:
+      # Do not inject <SERVICE>_PORT env vars (Phoenix crashes on PHOENIX_PORT=tcp://...).
+      enableServiceLinks: false
       containers:
         - name: prometheus
           image: {{ .Values.observability.prometheus.image }}
