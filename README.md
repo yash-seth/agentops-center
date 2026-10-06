@@ -74,9 +74,15 @@ flowchart LR
 ## Status
 | Area | State |
 |---|---|
-| Runtime, registry, console, gateway, incidents, replay, FinOps, guardrails, evals, CLI | built and unit tested; the core flows were also run against live local servers |
-| Dockerfile, compose, Helm chart, kind config, GitHub Actions, AKS scripts | written and statically checked; **not yet run** (needs Docker, kind, helm, GitHub, Azure) |
-| Traces in Phoenix, Grafana dashboard live, pgvector on Postgres | need the Docker stack; configuration is in place |
+| Runtime, registry, console, gateway, incidents, replay, FinOps, guardrails, evals, CLI | built and unit tested; core flows also run against live local servers |
+| Docker images, Helm chart, kind deployment | **verified in GitHub Actions**: images build, chart is schema-valid (23/23 resources) and installs into a kind cluster backed by Postgres and pgvector, smoke test 7/7 |
+| Observability stack (Phoenix, collector, Prometheus, Alertmanager, Grafana) | **verified in GitHub Actions** with a real fault: Prometheus scrapes and loads the alert rules, Grafana provisions the dashboard, traces reach Phoenix, and the alert opens an incident with the affected runs attached (8/8 checks) |
+| Test suite | 229 tests pass in CI on Linux, including the vector store against a real Postgres |
+| docker compose stack, release workflow (GHCR publish), AKS scripts, real-model evals | written and statically checked; **not yet run** (compose needs local Docker, release needs a tag, AKS needs a subscription, real evals need an API key) |
+
+The GitHub Actions runs are the evidence for the "verified" rows; see the Actions tab. Bugs those
+runs found (a Kubernetes service-variable crash, a Postgres-only column-length error) were fixed and
+are covered by tests.
 
 Known limits (details in the ADRs in `docs/adr/`): no schema migrations yet; PII detection is
 pattern-based and does not find person names; the deterministic eval baseline guards regressions but

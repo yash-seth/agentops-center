@@ -55,10 +55,13 @@ def test_readme_indexes_every_doc():
     assert "infra/aks/README.md" in readme and "docs/adr/" in readme
 
 
-def test_readme_states_what_was_not_run():
-    """Honesty check: the README must keep saying the container and cloud pieces are unverified."""
+def test_readme_is_honest_about_what_is_and_is_not_verified():
+    """Verified claims must point at CI as evidence, and the unrun pieces must stay labelled."""
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "verified in GitHub Actions" in readme
     assert "not yet run" in readme
+    for still_unrun in ("release workflow", "AKS scripts", "docker compose stack"):
+        assert still_unrun in readme, still_unrun
 
 
 def test_license_names_the_author_and_year():
